@@ -658,14 +658,14 @@ void LayoutThumbnails(HWND hwnd) {
     const int count = static_cast<int>(g_thumbnails.size());
     if (!count || client.right <= 0 || client.bottom <= 0) return;
     constexpr int gap = 4;
-    const int available = std::max(1, client.right - gap * (count + 1));
+    const int available = std::max(1, static_cast<int>(client.right) - gap * (count + 1));
     const int cellWidth = std::max(90, std::min(230, available / count));
     int left = gap;
     for (auto& item : g_thumbnails) {
         SIZE sourceSize{};
         DwmQueryThumbnailSourceSize(item.handle, &sourceSize);
         const int maxWidth = std::max(1, cellWidth);
-        const int maxHeight = std::max(1, client.bottom - gap * 2);
+        const int maxHeight = std::max(1, static_cast<int>(client.bottom) - gap * 2);
         double scale = 1.0;
         if (sourceSize.cx > 0 && sourceSize.cy > 0)
             scale = std::min(static_cast<double>(maxWidth) / sourceSize.cx,
