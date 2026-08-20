@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cwctype>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -33,6 +34,12 @@ enum : int {
     IDC_LAUNCH_COUNT, IDC_LAUNCH_DELAY, IDC_LAUNCH_OK
 };
 
+enum : int {
+    IDC_ARRANGE_WIDTH = 3101, IDC_ARRANGE_HEIGHT, IDC_ARRANGE_X,
+    IDC_ARRANGE_Y, IDC_ARRANGE_OFFSET_X, IDC_ARRANGE_OFFSET_Y,
+    IDC_ARRANGE_KEEP_SIZE, IDC_ARRANGE_OK
+};
+
 struct WindowItem {
     HWND hwnd{};
     std::wstring title;
@@ -52,6 +59,7 @@ struct MacroEvent {
 HINSTANCE g_instance{};
 HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
 HWND g_launcher{};
+HWND g_arranger{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
@@ -79,7 +87,9 @@ bool IsCandidate(HWND hwnd) {
     if (ex & WS_EX_TOOLWINDOW) return false;
     RECT r{};
     if (!GetWindowRect(hwnd, &r) || r.right - r.left < 120 || r.bottom - r.top < 80) return false;
-    return !WindowTitle(hwnd).empty();
+    std::wstring title = WindowTitle(hwnd);
+    std::transform(title.begin(), title.end(), title.begin(), towlower);
+    return title.find(L"doomsday") != std::wstring::npos;
 }
 
 std::wstring HexHandle(HWND hwnd) {
@@ -500,6 +510,104 @@ void ShowLauncher() {
     ShowWindow(g_launcher, SW_SHOW); UpdateWindow(g_launcher);
 }
 
+struct ArrangeRequest {
+    int width{960}, height{540}, x{0}, y{20}, offsetX{0}, offsetY{0};
+    bool keepSize{};
+};
+
+void ArrangeOverlapped(const ArrangeRequest& request) {
+    SyncChecksFromList();
+    std::vector<HWND> targets;
+    for (auto& item : g_windows) if (item.selected && IsWindow(item.hwnd)) targets.push_back(item.hwnd);
+    if (targets.empty()) {
+        MessageBoxW(g_main, L"Chưa chọn cửa sổ game nào.", kTitle, MB_ICONINFORMATION); return;
+    }
+    HDWP defer = BeginDeferWindowPos(static_cast<int>(targets.size()));
+    for (size_t i = 0; i < targets.size(); ++i) {
+        HWND target = targets[i];
+        ShowWindow(target, SW_RESTORE);
+        RECT current{}; GetWindowRect(target, &current);
+        int outerWidth = current.right - current.left;
+        int outerHeight = current.bottom - current.top;
+        if (!request.keepSize) {
+            RECT desired{0, 0, request.width, request.height};
+            DWORD style = static_cast<DWORD>(GetWindowLongPtrW(target, GWL_STYLE));
+            DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(target, GWL_EXSTYLE));
+            AdjustWindowRectEx(&desired, style, GetMenu(target) != nullptr, exStyle);
+            outerWidth = desired.right - desired.left;
+            outerHeight = desired.bottom - desired.top;
+        }
+        int x = request.x + static_cast<int>(i) * request.offsetX;
+        int y = request.y + static_cast<int>(i) * request.offsetY;
+        defer = DeferWindowPos(defer, target, HWND_TOP, x, y, outerWidth, outerHeight,
+                               SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+    if (defer) EndDeferWindowPos(defer);
+    if (g_source && IsWindow(g_source)) SetWindowPos(g_source, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    SetStatus(L"Đã xếp chồng " + std::to_wstring(targets.size()) + L" cửa sổ game.");
+}
+
+LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CREATE: {
+            auto label = [&](const wchar_t* text, int x, int y, int w) {
+                HWND c = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, w, 20, hwnd, nullptr, g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            };
+            auto edit = [&](int id, const wchar_t* text, int x, int y, int w) {
+                HWND c = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", text, WS_CHILD | WS_VISIBLE | ES_NUMBER,
+                                         x, y, w, 23, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE); return c;
+            };
+            label(L"Xếp chồng lên nhau", 18, 16, 220);
+            HWND keep = CreateWindowW(L"BUTTON", L"Không thay đổi kích thước hiện tại", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                      18, 47, 250, 22, hwnd, reinterpret_cast<HMENU>(IDC_ARRANGE_KEEP_SIZE), g_instance, nullptr);
+            SendMessageW(keep, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            label(L"Kích thước vùng game:", 18, 83, 150); edit(IDC_ARRANGE_WIDTH, L"960", 174, 80, 68);
+            label(L"×", 249, 83, 18); edit(IDC_ARRANGE_HEIGHT, L"540", 270, 80, 68);
+            label(L"Vị trí cách trái (X):", 18, 119, 150); edit(IDC_ARRANGE_X, L"0", 174, 116, 68); label(L"Pixel", 250, 119, 45);
+            label(L"Vị trí cách trên (Y):", 18, 155, 150); edit(IDC_ARRANGE_Y, L"20", 174, 152, 68); label(L"Pixel", 250, 155, 45);
+            label(L"Độ lệch mỗi cửa sổ X:", 18, 191, 160); edit(IDC_ARRANGE_OFFSET_X, L"0", 174, 188, 68);
+            label(L"Y:", 250, 191, 24); edit(IDC_ARRANGE_OFFSET_Y, L"0", 274, 188, 64);
+            HWND ok = CreateWindowW(L"BUTTON", L"Xác nhận", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                                    143, 230, 94, 30, hwnd, reinterpret_cast<HMENU>(IDC_ARRANGE_OK), g_instance, nullptr);
+            SendMessageW(ok, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            return 0;
+        }
+        case WM_COMMAND:
+            if (LOWORD(wp) == IDC_ARRANGE_OK) {
+                ArrangeRequest request;
+                request.width = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_WIDTH).c_str()), 320, 7680);
+                request.height = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_HEIGHT).c_str()), 240, 4320);
+                request.x = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_X).c_str()), 0, 30000);
+                request.y = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_Y).c_str()), 0, 30000);
+                request.offsetX = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_X).c_str()), 0, 2000);
+                request.offsetY = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_Y).c_str()), 0, 2000);
+                request.keepSize = Button_GetCheck(GetDlgItem(hwnd, IDC_ARRANGE_KEEP_SIZE)) == BST_CHECKED;
+                ArrangeOverlapped(request); DestroyWindow(hwnd); return 0;
+            }
+            break;
+        case WM_DESTROY: g_arranger = nullptr; return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void ShowArranger() {
+    if (g_arranger) { ShowWindow(g_arranger, SW_RESTORE); SetForegroundWindow(g_arranger); return; }
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = ArrangerProc; wc.hInstance = g_instance;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.lpszClassName = L"AutoSyncClean.Arranger"; wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        RegisterClassExW(&wc); registered = true;
+    }
+    RECT owner{}; GetWindowRect(g_main, &owner);
+    g_arranger = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.Arranger", L"Sắp xếp cửa sổ",
+                                 WS_CAPTION | WS_SYSMENU, owner.left + 90, owner.top + 70, 380, 310,
+                                 g_main, nullptr, g_instance, nullptr);
+    ShowWindow(g_arranger, SW_SHOW); UpdateWindow(g_arranger);
+}
+
 void Layout(HWND hwnd) {
     RECT r{}; GetClientRect(hwnd, &r);
     constexpr int gap = 4, top = 4, buttonH = 27;
@@ -622,7 +730,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case IDC_REFRESH: RefreshWindows(true); break;
                 case IDC_SYNC: SetSync(!g_sync); break;
                 case IDC_SET_MAIN: ShowLauncher(); break;
-                case IDC_TILE: TileSelected(); break;
+                case IDC_TILE: ShowArranger(); break;
                 case IDC_RECORD: ToggleRecord(); break;
                 case IDC_PLAY:
                     if (g_macro.empty()) MessageBoxW(hwnd, L"Chưa có chuỗi thao tác nào được ghi.", kTitle, MB_ICONINFORMATION);
