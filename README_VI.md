@@ -11,6 +11,7 @@
 - Đồng bộ phím xuống/lên, chuột trái/phải/giữa, di chuyển và cuộn.
 - Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
 - Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
+- Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
 
@@ -51,6 +52,13 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
 
 Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuyển/đổi kích thước các cửa sổ game đang chạy quyền cao. Sau khi sắp xếp, thanh trạng thái sẽ báo số cửa sổ thực sự áp dụng thành công.
+
+### Thanh cửa sổ thu nhỏ
+
+1. Bấm nút biểu tượng thanh thu nhỏ `▤` ở góc trên bên phải.
+2. Thanh **Xem cửa sổ thu nhỏ** sẽ mở sát đáy màn hình và tự hiển thị ảnh trực tiếp của mọi cửa sổ Doomsday.
+3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
+4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
 
 ## Giới hạn kỹ thuật
 
