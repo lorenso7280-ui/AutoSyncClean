@@ -667,11 +667,11 @@ void LayoutThumbnails(HWND hwnd) {
         const int maxWidth = std::max(1, cellWidth);
         const int maxHeight = std::max(1, client.bottom - gap * 2);
         double scale = 1.0;
-        if (sourceSize.x > 0 && sourceSize.y > 0)
-            scale = std::min(static_cast<double>(maxWidth) / sourceSize.x,
-                             static_cast<double>(maxHeight) / sourceSize.y);
-        const int width = std::max(1, static_cast<int>(sourceSize.x * scale));
-        const int height = std::max(1, static_cast<int>(sourceSize.y * scale));
+        if (sourceSize.cx > 0 && sourceSize.cy > 0)
+            scale = std::min(static_cast<double>(maxWidth) / sourceSize.cx,
+                             static_cast<double>(maxHeight) / sourceSize.cy);
+        const int width = std::max(1, static_cast<int>(sourceSize.cx * scale));
+        const int height = std::max(1, static_cast<int>(sourceSize.cy * scale));
         const int top = gap + (maxHeight - height) / 2;
         item.destination = {left + (cellWidth - width) / 2, top,
                             left + (cellWidth - width) / 2 + width, top + height};
