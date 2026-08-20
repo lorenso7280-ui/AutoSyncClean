@@ -157,8 +157,10 @@ bool PointInSource(POINT screen, POINT& client, RECT& rc) {
 LPARAM ScaledPoint(HWND target, double nx, double ny) {
     RECT r{};
     GetClientRect(target, &r);
-    int x = std::clamp(static_cast<int>(nx * r.right), 0, std::max(0L, r.right - 1));
-    int y = std::clamp(static_cast<int>(ny * r.bottom), 0, std::max(0L, r.bottom - 1));
+    int maxX = std::max(0, static_cast<int>(r.right) - 1);
+    int maxY = std::max(0, static_cast<int>(r.bottom) - 1);
+    int x = std::clamp(static_cast<int>(nx * r.right), 0, maxX);
+    int y = std::clamp(static_cast<int>(ny * r.bottom), 0, maxY);
     return MAKELPARAM(x, y);
 }
 
