@@ -20,7 +20,7 @@ constexpr wchar_t kTitle[] = L"AutoSync Clean 1.0 - Đồng Bộ Thao Tác Phím
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
-    IDC_PLAY, IDC_LIST, IDC_STATUS, IDC_FREE, IDC_HELP, IDC_COMMUNITY,
+    IDC_PLAY, IDC_LIST, IDC_STATUS, IDC_PLAN, IDC_SUPPORT, IDC_GROUP,
     IDM_SET_MAIN = 2001, IDM_TOGGLE_ITEM, IDM_REFRESH, IDM_CLOSE_ONE,
     IDM_REMOVE_ONE, IDM_SELECT_ALL, IDM_CLEAR_ALL, IDM_SHOW_ALL,
     IDM_CLOSE_ALL, IDM_REMOVE_ALL
@@ -375,18 +375,18 @@ void Layout(HWND hwnd) {
     MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
     int bottom = r.bottom - 28;
-    MoveWindow(GetDlgItem(hwnd, IDC_FREE), gap, bottom, 70, 23, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_HELP), 78, bottom, 72, 23, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_COMMUNITY), 154, bottom, 86, 23, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_PLAN), gap, bottom, 70, 23, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_SUPPORT), 78, bottom, 72, 23, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_GROUP), 154, bottom, 86, 23, TRUE);
     MoveWindow(g_status, 248, bottom + 3, std::max(60L, r.right - 254), 18, TRUE);
 }
 
 COLORREF ButtonColor(int id) {
     switch (id) {
         case IDC_SYNC: return g_sync ? RGB(238, 82, 83) : RGB(76, 210, 91);
-        case IDC_FREE: return RGB(243, 137, 57);
-        case IDC_HELP: return RGB(76, 200, 115);
-        case IDC_COMMUNITY: return RGB(54, 153, 219);
+        case IDC_PLAN: return RGB(243, 137, 57);
+        case IDC_SUPPORT: return RGB(76, 200, 115);
+        case IDC_GROUP: return RGB(54, 153, 219);
         default: return RGB(247, 249, 251);
     }
 }
@@ -402,14 +402,14 @@ void DrawButton(const DRAWITEMSTRUCT* d) {
     }
     HBRUSH brush = CreateSolidBrush(bg);
     FillRect(d->hDC, &rc, brush); DeleteObject(brush);
-    HPEN pen = CreatePen(PS_SOLID, 1, id == IDC_SYNC || id >= IDC_FREE ? RGB(255,255,255) : RGB(173,181,189));
+    HPEN pen = CreatePen(PS_SOLID, 1, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : RGB(173,181,189));
     auto oldPen = SelectObject(d->hDC, pen);
     auto oldBrush = SelectObject(d->hDC, GetStockObject(NULL_BRUSH));
     Rectangle(d->hDC, rc.left, rc.top, rc.right, rc.bottom);
     SelectObject(d->hDC, oldBrush); SelectObject(d->hDC, oldPen); DeleteObject(pen);
     wchar_t text[80]{}; GetWindowTextW(d->hwndItem, text, 80);
     SetBkMode(d->hDC, TRANSPARENT);
-    SetTextColor(d->hDC, id == IDC_SYNC || id >= IDC_FREE ? RGB(255,255,255) : RGB(45,52,59));
+    SetTextColor(d->hDC, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : RGB(45,52,59));
     auto oldFont = SelectObject(d->hDC, g_uiFont);
     DrawTextW(d->hDC, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(d->hDC, oldFont);
@@ -437,9 +437,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             button(IDC_TILE, L"▦");
             button(IDC_RECORD, L"●");
             button(IDC_PLAY, L"▶");
-            button(IDC_FREE, L"Miễn phí");
-            button(IDC_HELP, L"☎  Hỗ trợ");
-            button(IDC_COMMUNITY, L"Cộng đồng");
+            button(IDC_PLAN, L"Miễn phí");
+            button(IDC_SUPPORT, L"☎  Hỗ trợ");
+            button(IDC_GROUP, L"Cộng đồng");
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
