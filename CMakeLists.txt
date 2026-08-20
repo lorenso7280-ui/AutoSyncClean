@@ -14,4 +14,5 @@ target_link_libraries(AutoSyncClean PRIVATE comctl32 dwmapi comdlg32)
 
 if(MSVC)
     target_compile_options(AutoSyncClean PRIVATE /W4 /permissive- /utf-8)
+    target_link_options(AutoSyncClean PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
 endif()
