@@ -23,7 +23,7 @@ constexpr wchar_t kTitle[] = L"AutoSync Clean 1.0 - Đồng Bộ Thao Tác Phím
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
-    IDC_PLAY, IDC_LIST, IDC_STATUS, IDC_PLAN, IDC_SUPPORT, IDC_GROUP,
+    IDC_PLAY, IDC_THUMBNAILS, IDC_LIST, IDC_STATUS, IDC_PLAN, IDC_SUPPORT, IDC_GROUP,
     IDM_SET_MAIN = 2001, IDM_TOGGLE_ITEM, IDM_REFRESH, IDM_CLOSE_ONE,
     IDM_REMOVE_ONE, IDM_SELECT_ALL, IDM_CLEAR_ALL, IDM_SHOW_ALL,
     IDM_CLOSE_ALL, IDM_REMOVE_ALL
@@ -46,6 +46,12 @@ struct WindowItem {
     bool selected{true};
 };
 
+struct ThumbnailItem {
+    HWND source{};
+    HTHUMBNAIL handle{};
+    RECT destination{};
+};
+
 enum class MacroType { KeyDown, KeyUp, MouseMove, MouseDown, MouseUp, Wheel };
 struct MacroEvent {
     MacroType type{};
@@ -60,9 +66,11 @@ HINSTANCE g_instance{};
 HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
 HWND g_launcher{};
 HWND g_arranger{};
+HWND g_thumbnailViewer{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
+std::vector<ThumbnailItem> g_thumbnails;
 std::unordered_set<HWND> g_ignored;
 std::vector<MacroEvent> g_macro;
 HWND g_source{};
@@ -71,6 +79,7 @@ std::chrono::steady_clock::time_point g_lastMacro;
 
 void SyncChecksFromList();
 void RefreshWindows(bool clearIgnored);
+void RefreshThumbnailViewer(bool force);
 
 std::wstring WindowTitle(HWND hwnd) {
     int n = GetWindowTextLengthW(hwnd);
@@ -160,6 +169,7 @@ void RefreshWindows(bool clearIgnored = false) {
     std::sort(g_windows.begin(), g_windows.end(), [](const auto& a, const auto& b) { return a.title < b.title; });
     if (g_source && !IsWindow(g_source)) g_source = nullptr;
     RebuildList();
+    RefreshThumbnailViewer(false);
 }
 
 void SyncChecksFromList() {
@@ -637,6 +647,128 @@ void ShowArranger() {
     ShowWindow(g_arranger, SW_SHOW); UpdateWindow(g_arranger);
 }
 
+void ClearThumbnails() {
+    for (auto& item : g_thumbnails)
+        if (item.handle) DwmUnregisterThumbnail(item.handle);
+    g_thumbnails.clear();
+}
+
+void LayoutThumbnails(HWND hwnd) {
+    RECT client{}; GetClientRect(hwnd, &client);
+    const int count = static_cast<int>(g_thumbnails.size());
+    if (!count || client.right <= 0 || client.bottom <= 0) return;
+    constexpr int gap = 4;
+    const int available = std::max(1, client.right - gap * (count + 1));
+    const int cellWidth = std::max(90, std::min(230, available / count));
+    int left = gap;
+    for (auto& item : g_thumbnails) {
+        SIZE sourceSize{};
+        DwmQueryThumbnailSourceSize(item.handle, &sourceSize);
+        const int maxWidth = std::max(1, cellWidth);
+        const int maxHeight = std::max(1, client.bottom - gap * 2);
+        double scale = 1.0;
+        if (sourceSize.x > 0 && sourceSize.y > 0)
+            scale = std::min(static_cast<double>(maxWidth) / sourceSize.x,
+                             static_cast<double>(maxHeight) / sourceSize.y);
+        const int width = std::max(1, static_cast<int>(sourceSize.x * scale));
+        const int height = std::max(1, static_cast<int>(sourceSize.y * scale));
+        const int top = gap + (maxHeight - height) / 2;
+        item.destination = {left + (cellWidth - width) / 2, top,
+                            left + (cellWidth - width) / 2 + width, top + height};
+        DWM_THUMBNAIL_PROPERTIES properties{};
+        properties.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
+                             DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
+        properties.rcDestination = item.destination;
+        properties.fVisible = TRUE;
+        properties.opacity = 255;
+        properties.fSourceClientAreaOnly = FALSE;
+        DwmUpdateThumbnailProperties(item.handle, &properties);
+        left += cellWidth + gap;
+    }
+    InvalidateRect(hwnd, nullptr, TRUE);
+}
+
+bool ThumbnailSourcesChanged() {
+    if (g_thumbnails.size() != g_windows.size()) return true;
+    for (size_t i = 0; i < g_windows.size(); ++i)
+        if (g_thumbnails[i].source != g_windows[i].hwnd || !IsWindow(g_thumbnails[i].source)) return true;
+    return false;
+}
+
+void RefreshThumbnailViewer(bool force = false) {
+    if (!g_thumbnailViewer || (!force && !ThumbnailSourcesChanged())) return;
+    ClearThumbnails();
+    for (const auto& window : g_windows) {
+        HTHUMBNAIL thumbnail{};
+        if (SUCCEEDED(DwmRegisterThumbnail(g_thumbnailViewer, window.hwnd, &thumbnail)))
+            g_thumbnails.push_back({window.hwnd, thumbnail, {}});
+    }
+    LayoutThumbnails(g_thumbnailViewer);
+}
+
+LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CREATE:
+            g_thumbnailViewer = hwnd;
+            RefreshThumbnailViewer(true);
+            return 0;
+        case WM_SIZE:
+            LayoutThumbnails(hwnd);
+            return 0;
+        case WM_ERASEBKGND: {
+            RECT client{}; GetClientRect(hwnd, &client);
+            FillRect(reinterpret_cast<HDC>(wp), &client, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
+            return TRUE;
+        }
+        case WM_LBUTTONDOWN: {
+            POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            for (const auto& item : g_thumbnails) {
+                if (PtInRect(&item.destination, point) && IsWindow(item.source)) {
+                    ShowWindow(item.source, SW_RESTORE);
+                    SetWindowPos(item.source, HWND_TOP, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                    SetForegroundWindow(item.source);
+                    break;
+                }
+            }
+            return 0;
+        }
+        case WM_DESTROY:
+            ClearThumbnails();
+            g_thumbnailViewer = nullptr;
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void ToggleThumbnailViewer() {
+    if (g_thumbnailViewer) {
+        DestroyWindow(g_thumbnailViewer);
+        return;
+    }
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)};
+        wc.lpfnWndProc = ThumbnailViewerProc;
+        wc.hInstance = g_instance;
+        wc.hCursor = LoadCursorW(nullptr, IDC_HAND);
+        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        wc.lpszClassName = L"AutoSyncClean.ThumbnailViewer";
+        RegisterClassExW(&wc);
+        registered = true;
+    }
+    RECT work{}; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    constexpr int height = 180;
+    HWND viewer = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.ThumbnailViewer", L"Xem cửa sổ thu nhỏ",
+                                  WS_OVERLAPPEDWINDOW, work.left, std::max(work.top, work.bottom - height),
+                                  work.right - work.left, height, nullptr, nullptr, g_instance, nullptr);
+    if (viewer) {
+        ShowWindow(viewer, SW_SHOW);
+        UpdateWindow(viewer);
+    }
+}
+
 void Layout(HWND hwnd) {
     RECT r{}; GetClientRect(hwnd, &r);
     constexpr int gap = 4, top = 4, buttonH = 27;
@@ -646,6 +778,7 @@ void Layout(HWND hwnd) {
     int right = r.right - gap;
     MoveWindow(GetDlgItem(hwnd, IDC_PLAY), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE); right -= 32;
+    MoveWindow(GetDlgItem(hwnd, IDC_THUMBNAILS), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
     int bottom = r.bottom - 28;
@@ -709,6 +842,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             button(IDC_SET_MAIN, L"▣");
             g_btnSync = button(IDC_SYNC, L"⟳  Bật đồng bộ");
             button(IDC_TILE, L"▦");
+            button(IDC_THUMBNAILS, L"▤");
             button(IDC_RECORD, L"●");
             button(IDC_PLAY, L"▶");
             button(IDC_PLAN, L"Miễn phí");
@@ -760,6 +894,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case IDC_SYNC: SetSync(!g_sync); break;
                 case IDC_SET_MAIN: ShowLauncher(); break;
                 case IDC_TILE: ShowArranger(); break;
+                case IDC_THUMBNAILS: ToggleThumbnailViewer(); break;
                 case IDC_RECORD: ToggleRecord(); break;
                 case IDC_PLAY:
                     if (g_macro.empty()) MessageBoxW(hwnd, L"Chưa có chuỗi thao tác nào được ghi.", kTitle, MB_ICONINFORMATION);
@@ -778,6 +913,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_DESTROY:
             SetSync(false); g_playing = false;
+            if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
             if (g_uiFont) DeleteObject(g_uiFont);
             if (g_smallFont) DeleteObject(g_smallFont);
             PostQuitMessage(0); return 0;
