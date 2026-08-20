@@ -20,7 +20,7 @@ constexpr wchar_t kTitle[] = L"AutoSync Clean 1.0 - Đồng Bộ Thao Tác Phím
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
-    IDC_PLAY, IDC_LIST, IDC_STATUS,
+    IDC_PLAY, IDC_LIST, IDC_STATUS, IDC_FREE, IDC_HELP, IDC_COMMUNITY,
     IDM_SET_MAIN = 2001, IDM_TOGGLE_ITEM, IDM_REFRESH, IDM_CLOSE_ONE,
     IDM_REMOVE_ONE, IDM_SELECT_ALL, IDM_CLEAR_ALL, IDM_SHOW_ALL,
     IDM_CLOSE_ALL, IDM_REMOVE_ALL
@@ -45,6 +45,7 @@ struct MacroEvent {
 HINSTANCE g_instance{};
 HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
+HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
 std::unordered_set<HWND> g_ignored;
 std::vector<MacroEvent> g_macro;
@@ -104,15 +105,17 @@ void RebuildList() {
         LVITEMW item{};
         item.mask = LVIF_TEXT | LVIF_PARAM;
         item.iItem = static_cast<int>(i);
-        auto id = HexHandle(w.hwnd);
-        item.pszText = id.data();
+        auto number = std::to_wstring(i + 1);
+        item.pszText = number.data();
         item.lParam = reinterpret_cast<LPARAM>(w.hwnd);
         int row = ListView_InsertItem(g_list, &item);
-        ListView_SetItemText(g_list, row, 1, w.title.data());
+        auto id = HexHandle(w.hwnd);
+        ListView_SetItemText(g_list, row, 1, id.data());
+        ListView_SetItemText(g_list, row, 2, w.title.data());
         std::wstring state = IsWindow(w.hwnd) ? (g_sync && w.selected ? L"Đang hoạt động" : L"Online") : L"Đã đóng";
-        ListView_SetItemText(g_list, row, 2, state.data());
+        ListView_SetItemText(g_list, row, 3, state.data());
         auto size = WindowSize(w.hwnd);
-        ListView_SetItemText(g_list, row, 3, size.data());
+        ListView_SetItemText(g_list, row, 4, size.data());
         ListView_SetCheckState(g_list, row, w.selected ? TRUE : FALSE);
     }
     std::wstring s = L"Cửa sổ: " + std::to_wstring(g_windows.size());
@@ -362,40 +365,107 @@ void HandleMenu(int id) {
 
 void Layout(HWND hwnd) {
     RECT r{}; GetClientRect(hwnd, &r);
-    int y = 8, h = 30;
-    MoveWindow(GetDlgItem(hwnd, IDC_REFRESH), 8, y, 86, h, TRUE);
-    MoveWindow(g_btnSync, 100, y, 130, h, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_SET_MAIN), 236, y, 120, h, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_TILE), 362, y, 112, h, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_RECORD), 480, y, 122, h, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_PLAY), 608, y, 110, h, TRUE);
-    MoveWindow(g_list, 8, 46, std::max(100L, r.right - 16), std::max(80L, r.bottom - 82), TRUE);
-    MoveWindow(g_status, 8, r.bottom - 30, std::max(100L, r.right - 16), 22, TRUE);
+    constexpr int gap = 4, top = 4, buttonH = 27;
+    MoveWindow(GetDlgItem(hwnd, IDC_REFRESH), gap, top, 28, buttonH, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_SET_MAIN), 35, top, 28, buttonH, TRUE);
+    MoveWindow(g_btnSync, 67, top, 104, buttonH, TRUE);
+    int right = r.right - gap;
+    MoveWindow(GetDlgItem(hwnd, IDC_PLAY), right - 28, top, 28, buttonH, TRUE); right -= 32;
+    MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE); right -= 32;
+    MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE);
+    MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
+    int bottom = r.bottom - 28;
+    MoveWindow(GetDlgItem(hwnd, IDC_FREE), gap, bottom, 70, 23, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_HELP), 78, bottom, 72, 23, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_COMMUNITY), 154, bottom, 86, 23, TRUE);
+    MoveWindow(g_status, 248, bottom + 3, std::max(60L, r.right - 254), 18, TRUE);
+}
+
+COLORREF ButtonColor(int id) {
+    switch (id) {
+        case IDC_SYNC: return g_sync ? RGB(238, 82, 83) : RGB(76, 210, 91);
+        case IDC_FREE: return RGB(243, 137, 57);
+        case IDC_HELP: return RGB(76, 200, 115);
+        case IDC_COMMUNITY: return RGB(54, 153, 219);
+        default: return RGB(247, 249, 251);
+    }
+}
+
+void DrawButton(const DRAWITEMSTRUCT* d) {
+    RECT rc = d->rcItem;
+    const int id = static_cast<int>(d->CtlID);
+    COLORREF bg = ButtonColor(id);
+    if (d->itemState & ODS_SELECTED) {
+        bg = RGB(std::max(0, static_cast<int>(GetRValue(bg)) - 24),
+                 std::max(0, static_cast<int>(GetGValue(bg)) - 24),
+                 std::max(0, static_cast<int>(GetBValue(bg)) - 24));
+    }
+    HBRUSH brush = CreateSolidBrush(bg);
+    FillRect(d->hDC, &rc, brush); DeleteObject(brush);
+    HPEN pen = CreatePen(PS_SOLID, 1, id == IDC_SYNC || id >= IDC_FREE ? RGB(255,255,255) : RGB(173,181,189));
+    auto oldPen = SelectObject(d->hDC, pen);
+    auto oldBrush = SelectObject(d->hDC, GetStockObject(NULL_BRUSH));
+    Rectangle(d->hDC, rc.left, rc.top, rc.right, rc.bottom);
+    SelectObject(d->hDC, oldBrush); SelectObject(d->hDC, oldPen); DeleteObject(pen);
+    wchar_t text[80]{}; GetWindowTextW(d->hwndItem, text, 80);
+    SetBkMode(d->hDC, TRANSPARENT);
+    SetTextColor(d->hDC, id == IDC_SYNC || id >= IDC_FREE ? RGB(255,255,255) : RGB(45,52,59));
+    auto oldFont = SelectObject(d->hDC, g_uiFont);
+    DrawTextW(d->hDC, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(d->hDC, oldFont);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_CREATE: {
             g_main = hwnd;
+            g_uiFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, VIETNAMESE_CHARSET,
+                                  OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                  DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            g_smallFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, VIETNAMESE_CHARSET,
+                                     OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                     DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
             auto button = [&](int id, const wchar_t* text) {
-                return CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0,
-                                     hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
+                HWND control = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0,
+                                             hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
+                SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+                return control;
             };
-            button(IDC_REFRESH, L"↻ Làm mới");
-            g_btnSync = button(IDC_SYNC, L"⟳ Bật đồng bộ");
-            button(IDC_SET_MAIN, L"♙ Cửa sổ chính");
-            button(IDC_TILE, L"▦ Sắp xếp");
-            button(IDC_RECORD, L"● Ghi thao tác");
-            button(IDC_PLAY, L"▶ Phát lại");
+            button(IDC_REFRESH, L"◎");
+            button(IDC_SET_MAIN, L"▣");
+            g_btnSync = button(IDC_SYNC, L"⟳  Bật đồng bộ");
+            button(IDC_TILE, L"▦");
+            button(IDC_RECORD, L"●");
+            button(IDC_PLAY, L"▶");
+            button(IDC_FREE, L"Miễn phí");
+            button(IDC_HELP, L"☎  Hỗ trợ");
+            button(IDC_COMMUNITY, L"Cộng đồng");
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
-            ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
-            InsertColumn(0, 105, L"Mã cửa sổ"); InsertColumn(1, 300, L"Tiêu đề");
-            InsertColumn(2, 130, L"Trạng thái"); InsertColumn(3, 100, L"Kích thước");
-            g_status = CreateWindowW(L"STATIC", L"Sẵn sàng", WS_CHILD | WS_VISIBLE | SS_LEFT,
+            SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
+            ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER);
+            ListView_SetBkColor(g_list, RGB(255,255,255));
+            ListView_SetTextBkColor(g_list, RGB(255,255,255));
+            InsertColumn(0, 34, L"#"); InsertColumn(1, 92, L"Mã cửa sổ");
+            InsertColumn(2, 245, L"Tiêu đề"); InsertColumn(3, 128, L"Trạng thái");
+            InsertColumn(4, 90, L"Kích thước");
+            g_status = CreateWindowW(L"STATIC", L"Sẵn sàng", WS_CHILD | WS_VISIBLE | SS_RIGHT,
                                     0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_STATUS), g_instance, nullptr);
+            SendMessageW(g_status, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
+            const COLORREF caption = RGB(43, 139, 226);
+            DwmSetWindowAttribute(hwnd, 35, &caption, sizeof(caption));
             SetTimer(hwnd, 1, 3000, nullptr);
             RefreshWindows();
+            return 0;
+        }
+        case WM_DRAWITEM:
+            DrawButton(reinterpret_cast<DRAWITEMSTRUCT*>(lp)); return TRUE;
+        case WM_CTLCOLORSTATIC:
+            SetBkMode(reinterpret_cast<HDC>(wp), TRANSPARENT);
+            return reinterpret_cast<LRESULT>(GetStockObject(WHITE_BRUSH));
+        case WM_GETMINMAXINFO: {
+            auto* info = reinterpret_cast<MINMAXINFO*>(lp);
+            info->ptMinTrackSize = {560, 380};
             return 0;
         }
         case WM_SIZE: Layout(hwnd); return 0;
@@ -425,7 +495,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_DESTROY:
-            SetSync(false); g_playing = false; PostQuitMessage(0); return 0;
+            SetSync(false); g_playing = false;
+            if (g_uiFont) DeleteObject(g_uiFont);
+            if (g_smallFont) DeleteObject(g_smallFont);
+            PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -445,7 +518,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc);
     HWND hwnd = CreateWindowExW(0, kClassName, kTitle, WS_OVERLAPPEDWINDOW,
-                                CW_USEDEFAULT, CW_USEDEFAULT, 820, 580,
+                                CW_USEDEFAULT, CW_USEDEFAULT, 610, 480,
                                 nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
     ShowWindow(hwnd, show);
