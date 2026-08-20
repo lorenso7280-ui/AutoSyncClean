@@ -1,11 +1,13 @@
 #include <windows.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <dwmapi.h>
 #include <windowsx.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -26,6 +28,11 @@ enum : int {
     IDM_CLOSE_ALL, IDM_REMOVE_ALL
 };
 
+enum : int {
+    IDC_LAUNCH_PATH = 3001, IDC_LAUNCH_BROWSE, IDC_LAUNCH_ARGS,
+    IDC_LAUNCH_COUNT, IDC_LAUNCH_DELAY, IDC_LAUNCH_OK
+};
+
 struct WindowItem {
     HWND hwnd{};
     std::wstring title;
@@ -44,6 +51,7 @@ struct MacroEvent {
 
 HINSTANCE g_instance{};
 HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
+HWND g_launcher{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
@@ -54,6 +62,7 @@ bool g_sync{}, g_recording{}, g_playing{}, g_blockMove{};
 std::chrono::steady_clock::time_point g_lastMacro;
 
 void SyncChecksFromList();
+void RefreshWindows(bool clearIgnored);
 
 std::wstring WindowTitle(HWND hwnd) {
     int n = GetWindowTextLengthW(hwnd);
@@ -363,6 +372,134 @@ void HandleMenu(int id) {
     }
 }
 
+std::wstring ExecutablePath(HWND hwnd) {
+    if (!hwnd) return {};
+    DWORD pid{}; GetWindowThreadProcessId(hwnd, &pid);
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) return {};
+    std::wstring path(32768, L'\0');
+    DWORD size = static_cast<DWORD>(path.size());
+    if (!QueryFullProcessImageNameW(process, 0, path.data(), &size)) size = 0;
+    CloseHandle(process);
+    path.resize(size);
+    return path;
+}
+
+struct LaunchRequest {
+    std::wstring path;
+    std::wstring args;
+    int count{1};
+    DWORD delay{2000};
+};
+
+DWORD WINAPI LaunchThread(void* raw) {
+    std::unique_ptr<LaunchRequest> request(static_cast<LaunchRequest*>(raw));
+    std::wstring directory = request->path;
+    size_t slash = directory.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) directory.resize(slash);
+    int launched = 0;
+    for (int i = 0; i < request->count; ++i) {
+        std::wstring command = L"\"" + request->path + L"\"";
+        if (!request->args.empty()) command += L" " + request->args;
+        std::vector<wchar_t> mutableCommand(command.begin(), command.end());
+        mutableCommand.push_back(L'\0');
+        STARTUPINFOW startup{sizeof(startup)};
+        PROCESS_INFORMATION process{};
+        if (CreateProcessW(request->path.c_str(), mutableCommand.data(), nullptr, nullptr, FALSE,
+                           CREATE_NEW_PROCESS_GROUP, nullptr,
+                           directory.empty() ? nullptr : directory.c_str(), &startup, &process)) {
+            ++launched;
+            CloseHandle(process.hThread); CloseHandle(process.hProcess);
+        }
+        if (i + 1 < request->count) Sleep(request->delay);
+    }
+    PostMessageW(g_main, WM_APP + 1, static_cast<WPARAM>(launched), static_cast<LPARAM>(request->count));
+    return 0;
+}
+
+std::wstring ControlText(HWND hwnd, int id) {
+    HWND control = GetDlgItem(hwnd, id);
+    int length = GetWindowTextLengthW(control);
+    std::wstring text(static_cast<size_t>(length) + 1, L'\0');
+    GetWindowTextW(control, text.data(), length + 1);
+    text.resize(static_cast<size_t>(length));
+    return text;
+}
+
+LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CREATE: {
+            auto label = [&](const wchar_t* text, int x, int y, int w) {
+                HWND c = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, w, 20, hwnd, nullptr, g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            };
+            auto edit = [&](int id, const wchar_t* text, int x, int y, int w) {
+                HWND c = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", text, WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+                                         x, y, w, 23, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE); return c;
+            };
+            label(L"Đường dẫn:", 14, 18, 72);
+            std::wstring path = ExecutablePath(SelectedHwnd());
+            edit(IDC_LAUNCH_PATH, path.c_str(), 86, 15, 445);
+            HWND browse = CreateWindowW(L"BUTTON", L"...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 538, 15, 43, 23,
+                                        hwnd, reinterpret_cast<HMENU>(IDC_LAUNCH_BROWSE), g_instance, nullptr);
+            SendMessageW(browse, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            label(L"Tham số:", 14, 55, 72); edit(IDC_LAUNCH_ARGS, L"-la", 86, 52, 160);
+            label(L"Số cửa sổ:", 14, 91, 72); edit(IDC_LAUNCH_COUNT, L"1", 86, 88, 60);
+            label(L"Thời gian giãn cách:", 182, 91, 140); edit(IDC_LAUNCH_DELAY, L"2000", 322, 88, 80);
+            label(L"(Mili giây)", 410, 91, 90);
+            HWND ok = CreateWindowW(L"BUTTON", L"Xác nhận", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                                    260, 132, 88, 30, hwnd, reinterpret_cast<HMENU>(IDC_LAUNCH_OK), g_instance, nullptr);
+            SendMessageW(ok, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            return 0;
+        }
+        case WM_COMMAND:
+            if (LOWORD(wp) == IDC_LAUNCH_BROWSE) {
+                wchar_t path[MAX_PATH]{};
+                auto current = ControlText(hwnd, IDC_LAUNCH_PATH);
+                wcsncpy_s(path, current.c_str(), _TRUNCATE);
+                OPENFILENAMEW dialog{sizeof(dialog)};
+                dialog.hwndOwner = hwnd; dialog.lpstrFile = path; dialog.nMaxFile = MAX_PATH;
+                dialog.lpstrFilter = L"Chương trình Windows (*.exe)\0*.exe\0Tất cả tệp\0*.*\0";
+                dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+                if (GetOpenFileNameW(&dialog)) SetWindowTextW(GetDlgItem(hwnd, IDC_LAUNCH_PATH), path);
+                return 0;
+            }
+            if (LOWORD(wp) == IDC_LAUNCH_OK) {
+                auto path = ControlText(hwnd, IDC_LAUNCH_PATH);
+                if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                    MessageBoxW(hwnd, L"Đường dẫn chương trình không hợp lệ.", kTitle, MB_ICONWARNING); return 0;
+                }
+                auto request = std::make_unique<LaunchRequest>();
+                request->path = path; request->args = ControlText(hwnd, IDC_LAUNCH_ARGS);
+                request->count = std::clamp(_wtoi(ControlText(hwnd, IDC_LAUNCH_COUNT).c_str()), 1, 50);
+                request->delay = static_cast<DWORD>(std::clamp(_wtoi(ControlText(hwnd, IDC_LAUNCH_DELAY).c_str()), 0, 60000));
+                HANDLE thread = CreateThread(nullptr, 0, LaunchThread, request.release(), 0, nullptr);
+                if (thread) CloseHandle(thread);
+                DestroyWindow(hwnd); return 0;
+            }
+            break;
+        case WM_DESTROY: g_launcher = nullptr; return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void ShowLauncher() {
+    if (g_launcher) { ShowWindow(g_launcher, SW_RESTORE); SetForegroundWindow(g_launcher); return; }
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = LauncherProc; wc.hInstance = g_instance;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.lpszClassName = L"AutoSyncClean.Launcher"; wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        RegisterClassExW(&wc); registered = true;
+    }
+    RECT owner{}; GetWindowRect(g_main, &owner);
+    g_launcher = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.Launcher", L"Mở cửa sổ",
+                                 WS_CAPTION | WS_SYSMENU, owner.left + 20, owner.top + 80, 610, 215,
+                                 g_main, nullptr, g_instance, nullptr);
+    ShowWindow(g_launcher, SW_SHOW); UpdateWindow(g_launcher);
+}
+
 void Layout(HWND hwnd) {
     RECT r{}; GetClientRect(hwnd, &r);
     constexpr int gap = 4, top = 4, buttonH = 27;
@@ -484,7 +621,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             switch (id) {
                 case IDC_REFRESH: RefreshWindows(true); break;
                 case IDC_SYNC: SetSync(!g_sync); break;
-                case IDC_SET_MAIN: SetMainWindow(SelectedHwnd()); break;
+                case IDC_SET_MAIN: ShowLauncher(); break;
                 case IDC_TILE: TileSelected(); break;
                 case IDC_RECORD: ToggleRecord(); break;
                 case IDC_PLAY:
@@ -492,6 +629,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     else if (!g_playing) CloseHandle(CreateThread(nullptr, 0, PlayThread, nullptr, 0, nullptr));
                     break;
             }
+            return 0;
+        }
+        case WM_APP + 1: {
+            RefreshWindows(true);
+            std::wstring text = L"Đã mở " + std::to_wstring(wp) + L"/" + std::to_wstring(lp) + L" cửa sổ.";
+            SetStatus(text);
+            if (wp != static_cast<WPARAM>(lp))
+                MessageBoxW(hwnd, L"Một số tiến trình không mở được. Game có thể đang chặn đa phiên hoặc cần chạy quyền Administrator.", kTitle, MB_ICONWARNING);
             return 0;
         }
         case WM_DESTROY:
