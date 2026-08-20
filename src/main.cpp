@@ -522,10 +522,16 @@ void ArrangeOverlapped(const ArrangeRequest& request) {
     if (targets.empty()) {
         MessageBoxW(g_main, L"Chưa chọn cửa sổ game nào.", kTitle, MB_ICONINFORMATION); return;
     }
-    HDWP defer = BeginDeferWindowPos(static_cast<int>(targets.size()));
+    struct DesiredWindow { HWND hwnd; int x, y, width, height; };
+    std::vector<DesiredWindow> desiredWindows;
     for (size_t i = 0; i < targets.size(); ++i) {
         HWND target = targets[i];
-        ShowWindow(target, SW_RESTORE);
+        WINDOWPLACEMENT placement{sizeof(placement)};
+        if (GetWindowPlacement(target, &placement) && placement.showCmd != SW_SHOWNORMAL) {
+            placement.showCmd = SW_SHOWNORMAL;
+            SetWindowPlacement(target, &placement);
+        }
+        ShowWindowAsync(target, SW_RESTORE);
         RECT current{}; GetWindowRect(target, &current);
         int outerWidth = current.right - current.left;
         int outerHeight = current.bottom - current.top;
@@ -539,12 +545,35 @@ void ArrangeOverlapped(const ArrangeRequest& request) {
         }
         int x = request.x + static_cast<int>(i) * request.offsetX;
         int y = request.y + static_cast<int>(i) * request.offsetY;
-        defer = DeferWindowPos(defer, target, HWND_TOP, x, y, outerWidth, outerHeight,
-                               SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        desiredWindows.push_back({target, x, y, outerWidth, outerHeight});
     }
-    if (defer) EndDeferWindowPos(defer);
+    auto applyPositions = [&]() {
+        for (const auto& desired : desiredWindows) {
+            SetWindowPos(desired.hwnd, nullptr, desired.x, desired.y, desired.width, desired.height,
+                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+            MoveWindow(desired.hwnd, desired.x, desired.y, desired.width, desired.height, TRUE);
+        }
+    };
+    applyPositions();
+    Sleep(120);
+    applyPositions();
+    int succeeded = 0;
+    for (const auto& desired : desiredWindows) {
+        RECT actual{};
+        if (GetWindowRect(desired.hwnd, &actual) &&
+            abs(actual.left - desired.x) <= 3 && abs(actual.top - desired.y) <= 3 &&
+            (request.keepSize || (abs((actual.right - actual.left) - desired.width) <= 8 &&
+                                  abs((actual.bottom - actual.top) - desired.height) <= 8))) {
+            ++succeeded;
+        }
+    }
     if (g_source && IsWindow(g_source)) SetWindowPos(g_source, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    SetStatus(L"Đã xếp chồng " + std::to_wstring(targets.size()) + L" cửa sổ game.");
+    SetStatus(L"Đã xếp chồng " + std::to_wstring(succeeded) + L"/" + std::to_wstring(targets.size()) + L" cửa sổ game.");
+    if (succeeded != static_cast<int>(targets.size())) {
+        MessageBoxW(g_main,
+            L"Một số cửa sổ game đã từ chối thay đổi vị trí hoặc kích thước. Hãy đóng bản này, sau đó nhấp phải AutoSyncClean.exe và chọn Run as administrator rồi thử lại.",
+            kTitle, MB_ICONWARNING);
+    }
 }
 
 LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
