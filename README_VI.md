@@ -50,6 +50,8 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
 5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
 
+Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuyển/đổi kích thước các cửa sổ game đang chạy quyền cao. Sau khi sắp xếp, thanh trạng thái sẽ báo số cửa sổ thực sự áp dụng thành công.
+
 ## Giới hạn kỹ thuật
 
 - Ứng dụng dùng hook bàn phím/chuột cấp thấp và gửi thông điệp Win32 tới cửa sổ đích.
