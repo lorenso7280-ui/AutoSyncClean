@@ -4,13 +4,13 @@
 
 ## Chức năng
 
-- Tự tìm các cửa sổ cấp cao đang hiển thị.
+- Chỉ hiển thị các cửa sổ game Doomsday; ẩn Settings, trình duyệt và ứng dụng hệ thống.
 - Mở đồng thời nhiều tiến trình từ một file `.exe`, với tham số dòng lệnh, số lượng và thời gian giãn cách tùy chọn.
 - Chọn/bỏ chọn từng cửa sổ bằng checkbox.
 - Đặt một cửa sổ làm cửa sổ chính bằng nút **Cửa sổ chính**, nhấp đúp hoặc menu chuột phải.
 - Đồng bộ phím xuống/lên, chuột trái/phải/giữa, di chuyển và cuộn.
 - Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
-- Sắp xếp các cửa sổ đã chọn theo dạng lưới.
+- Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
 
@@ -41,6 +41,14 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 4. Nếu game chạy quyền Administrator, hãy chạy AutoSync Clean cùng quyền. Nếu game hoặc launcher tự khóa một phiên, phần mềm không vượt khóa đó.
 
 Để ghi chuỗi thao tác, bấm **Ghi thao tác**, thao tác trong cửa sổ chính, bấm **Dừng ghi**, sau đó dùng **Phát lại**.
+
+### Xếp chồng và di chuyển cửa sổ
+
+1. Đánh dấu các cửa sổ game cần sắp xếp và bấm nút biểu tượng lưới ở góc trên bên phải.
+2. Nhập kích thước vùng game, vị trí cách mép trái `X` và cách mép trên `Y`.
+3. Đặt độ lệch mỗi cửa sổ `X = 0`, `Y = 0` để các cửa sổ chồng khít và nhìn như một cửa sổ duy nhất.
+4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
+5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
 
 ## Giới hạn kỹ thuật
 
