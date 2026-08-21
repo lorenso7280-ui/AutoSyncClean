@@ -25,6 +25,7 @@
 - Sắp xếp/resize và thanh cửa sổ thu nhỏ luôn áp dụng cho toàn bộ cửa sổ game `ONLINE`, không cần tích checkbox; checkbox chỉ quyết định cửa sổ nhận thao tác đồng bộ.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
+- Thanh dưới đã bỏ ba nút quảng bá **Miễn phí**, **Hỗ trợ** và **Cộng đồng**; chỉ giữ thanh trạng thái chạy hết chiều ngang cửa sổ.
 - Năm nút bên phải dùng biểu tượng GDI tự vẽ, không phụ thuộc font của máy, theo đúng thứ tự: `R` bản ghi, lưới sắp xếp, quả địa cầu Proxy, màn hình thu nhỏ và bánh răng Thiết lập.
 - Nút bản ghi `R` mở cửa sổ **Quản lí bản ghi** với Bắt đầu/Kết thúc, số lần lặp, giãn cách, danh sách bản ghi và chi tiết từng sự kiện.
 - Khi mới mở **Quản lí bản ghi**, danh sách luôn trống. Nhấp phải trong khung **Tên bản ghi** để **Thêm bản ghi**, **Xóa bản ghi** hoặc **Xóa tất cả**.
