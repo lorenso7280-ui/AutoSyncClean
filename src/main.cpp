@@ -44,6 +44,7 @@ struct WindowItem {
     HWND hwnd{};
     std::wstring title;
     bool selected{};
+    std::wstring groupTitle;
 };
 
 struct ThumbnailItem {
@@ -127,7 +128,10 @@ bool IsCandidate(HWND hwnd) {
     if (!GetWindowRect(hwnd, &r) || r.right - r.left < 120 || r.bottom - r.top < 80) return false;
     std::wstring title = WindowTitle(hwnd);
     std::transform(title.begin(), title.end(), title.begin(), towlower);
-    return title.find(L"doomsday") != std::wstring::npos;
+    const bool tracked = std::any_of(g_windows.begin(), g_windows.end(), [hwnd](const auto& window) {
+        return window.hwnd == hwnd;
+    });
+    return tracked || title.find(L"doomsday") != std::wstring::npos;
 }
 
 std::wstring HexHandle(HWND hwnd) {
@@ -188,17 +192,24 @@ BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
     const std::wstring title = WindowTitle(hwnd);
     if (it == g_windows.end()) {
         it = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& w) {
-            return !IsWindow(w.hwnd) && w.title == title;
+            return !IsWindow(w.hwnd) && w.groupTitle == title;
         });
         if (it != g_windows.end()) {
-            it->hwnd = hwnd; it->title = title;
+            it->hwnd = hwnd;
+            if (it->title.rfind(L"Cửa sổ ", 0) == 0) SetWindowTextW(hwnd, it->title.c_str());
+            else it->title = title;
         } else {
             const bool trackedGroup = std::any_of(g_windows.begin(), g_windows.end(), [&](const auto& w) {
-                return w.title == title;
+                return w.groupTitle == title;
             });
-            if (trackedGroup) g_windows.push_back({hwnd, title, false});
+            if (trackedGroup) g_windows.push_back({hwnd, title, false, title});
         }
-    } else it->title = title;
+    } else if (it->title.rfind(L"Cửa sổ ", 0) == 0) {
+        if (title != it->title) SetWindowTextW(hwnd, it->title.c_str());
+    } else {
+        it->title = title;
+        it->groupTitle = title;
+    }
     return TRUE;
 }
 
@@ -225,10 +236,21 @@ void SyncChecksFromList() {
 bool PointInSource(POINT screen, POINT& client, RECT& rc) {
     HWND source = g_source ? g_source : GetForegroundWindow();
     if (!source || source == g_main) return false;
+    HWND foreground = GetForegroundWindow();
+    if (g_source && GetAncestor(foreground, GA_ROOT) != GetAncestor(g_source, GA_ROOT)) return false;
     client = screen;
     ScreenToClient(source, &client);
     GetClientRect(source, &rc);
     return client.x >= 0 && client.y >= 0 && client.x < rc.right && client.y < rc.bottom;
+}
+
+HWND InputTarget(HWND topLevel) {
+    if (!IsWindow(topLevel)) return nullptr;
+    DWORD threadId = GetWindowThreadProcessId(topLevel, nullptr);
+    GUITHREADINFO info{sizeof(info)};
+    if (threadId && GetGUIThreadInfo(threadId, &info) && info.hwndFocus &&
+        (info.hwndFocus == topLevel || IsChild(topLevel, info.hwndFocus))) return info.hwndFocus;
+    return topLevel;
 }
 
 LPARAM ScaledPoint(HWND target, double nx, double ny) {
@@ -278,7 +300,10 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
         default: break;
     }
     if (msg == WM_MOUSEMOVE && g_blockMove) return;
-    ForTargets([&](HWND h) { PostMessageW(h, msg, wp, ScaledPoint(h, nx, ny)); });
+    ForTargets([&](HWND h) {
+        HWND target = InputTarget(h);
+        if (target) PostMessageW(target, msg, wp, ScaledPoint(target, nx, ny));
+    });
     MacroEvent e{mt, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0};
     AddMacro(e);
 }
@@ -296,12 +321,15 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wp, LPARAM lp) {
         auto* k = reinterpret_cast<KBDLLHOOKSTRUCT*>(lp);
         if (!(k->flags & LLKHF_INJECTED)) {
             HWND fg = GetForegroundWindow();
-            if (!g_source || fg == g_source) {
+            if (!g_source || GetAncestor(fg, GA_ROOT) == GetAncestor(g_source, GA_ROOT)) {
                 UINT msg = static_cast<UINT>(wp);
-                LPARAM keyData = 1 | (MapVirtualKeyW(k->scanCode, MAPVK_VSC_TO_VK_EX) << 16);
+                LPARAM keyData = 1 | (static_cast<LPARAM>(k->scanCode) << 16);
                 if (k->flags & LLKHF_EXTENDED) keyData |= 1LL << 24;
                 if (msg == WM_KEYUP || msg == WM_SYSKEYUP) keyData |= (1LL << 30) | (1LL << 31);
-                ForTargets([&](HWND h) { PostMessageW(h, msg, k->vkCode, keyData); });
+                ForTargets([&](HWND h) {
+                    HWND target = InputTarget(h);
+                    if (target) PostMessageW(target, msg, k->vkCode, keyData);
+                });
                 AddMacro({(msg == WM_KEYUP || msg == WM_SYSKEYUP) ? MacroType::KeyUp : MacroType::KeyDown,
                           k->vkCode, 0, 0, 0, 0});
             }
@@ -319,6 +347,7 @@ void SetSync(bool on) {
         if (!g_keyboardHook || !g_mouseHook) {
             MessageBoxW(g_main, L"Không thể cài hook. Hãy thử chạy bằng quyền Administrator nếu cửa sổ đích đang chạy quyền cao.", kTitle, MB_ICONERROR);
             g_sync = false;
+            SetWindowTextW(g_btnSync, L"⟳ Bật đồng bộ");
         }
     } else {
         if (g_keyboardHook) UnhookWindowsHookEx(g_keyboardHook);
@@ -445,7 +474,15 @@ void HandleMenu(int id) {
             break;
         case IDM_SELECT_ALL: case IDM_CLEAR_ALL:
             for (int i = 0; i < ListView_GetItemCount(g_list); ++i) ListView_SetCheckState(g_list, i, id == IDM_SELECT_ALL);
-            SyncChecksFromList(); RebuildList(); break;
+            SyncChecksFromList();
+            if (id == IDM_SELECT_ALL) {
+                for (size_t i = 0; i < g_windows.size(); ++i) {
+                    auto& window = g_windows[i];
+                    window.title = L"Cửa sổ " + std::to_wstring(i + 1);
+                    if (IsWindow(window.hwnd)) SetWindowTextW(window.hwnd, window.title.c_str());
+                }
+            }
+            RebuildList(); break;
         case IDM_SHOW_ALL:
             ForTargets([](HWND h) { ShowWindow(h, SW_RESTORE); }); break;
         case IDM_CLOSE_ALL:
@@ -885,9 +922,9 @@ void AcceptPickedWindow(HWND target) {
     });
     if (item == g_windows.end()) {
         item = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& window) {
-            return !IsWindow(window.hwnd) && window.title == title;
+            return !IsWindow(window.hwnd) && window.groupTitle == title;
         });
-        if (item == g_windows.end()) g_windows.push_back({target, title, false});
+        if (item == g_windows.end()) g_windows.push_back({target, title, false, title});
         else item->hwnd = target;
     }
     g_ignored.erase(target);
