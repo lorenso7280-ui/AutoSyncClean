@@ -7,6 +7,7 @@
 - Khi khởi động, danh sách luôn trống; chỉ hiển thị cửa sổ Doomsday do người dùng kéo thả nút tròn để nhận thủ công.
 - Giữ các cửa sổ đã nhận trong danh sách và tự đổi trạng thái `ONLINE`/`OFFLINE` khi game mở hoặc đóng.
 - Kéo biểu tượng tròn bên trái rồi thả vào cửa sổ Doomsday để nhận cửa sổ thủ công.
+- Sau khi nhận cửa sổ đầu tiên, các cửa sổ mới có cùng tiêu đề game sẽ tự động được thêm vào cùng nhóm.
 - Mở đồng thời nhiều tiến trình từ một file `.exe`, với tham số dòng lệnh, số lượng và thời gian giãn cách tùy chọn.
 - Tự lưu đường dẫn game, tham số, số lượng và thời gian giãn cách cho lần sử dụng sau.
 - Chọn/bỏ chọn từng cửa sổ bằng checkbox.
@@ -51,8 +52,9 @@ Các thông số trong cửa sổ **Mở cửa sổ** được lưu ngay khi b�
 1. Giữ chuột trái trên nút tròn `◎` ở góc trên bên trái.
 2. Kéo con trỏ dấu cộng vào cửa sổ game Doomsday rồi thả chuột.
 3. Cửa sổ được nhận sẽ xuất hiện trong danh sách với trạng thái `ONLINE`.
-4. Khi game đóng, dòng đó vẫn được giữ lại và chuyển thành `OFFLINE`. Khi cửa sổ cùng tên mở lại, phần mềm tự ghép và chuyển về `ONLINE`.
-5. Dùng menu chuột phải **Xóa khỏi danh sách** nếu muốn xóa hẳn một dòng, kể cả dòng đang `OFFLINE`.
+4. Sau khi đã nhận cửa sổ đầu tiên, nếu mở thêm 4 cửa sổ cùng tên game thì danh sách tự tăng lên thành tổng cộng 5 cửa sổ.
+5. Khi game đóng, dòng đó vẫn được giữ lại và chuyển thành `OFFLINE`. Khi cửa sổ cùng tên mở lại, phần mềm tự ghép và chuyển về `ONLINE`.
+6. Dùng menu chuột phải **Xóa khỏi danh sách** nếu muốn xóa hẳn một dòng, kể cả dòng đang `OFFLINE`.
 
 Để ghi chuỗi thao tác, bấm **Ghi thao tác**, thao tác trong cửa sổ chính, bấm **Dừng ghi**, sau đó dùng **Phát lại**.
 
