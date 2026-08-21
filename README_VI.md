@@ -4,7 +4,7 @@
 
 ## Chức năng
 
-- Chỉ hiển thị các cửa sổ game Doomsday; ẩn Settings, trình duyệt và ứng dụng hệ thống.
+- Khi khởi động, danh sách luôn trống; chỉ hiển thị cửa sổ Doomsday do người dùng kéo thả nút tròn để nhận thủ công.
 - Giữ các cửa sổ đã nhận trong danh sách và tự đổi trạng thái `ONLINE`/`OFFLINE` khi game mở hoặc đóng.
 - Kéo biểu tượng tròn bên trái rồi thả vào cửa sổ Doomsday để nhận cửa sổ thủ công.
 - Mở đồng thời nhiều tiến trình từ một file `.exe`, với tham số dòng lệnh, số lượng và thời gian giãn cách tùy chọn.
