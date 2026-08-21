@@ -36,7 +36,7 @@ enum : int {
     IDC_SETTINGS_AUTORENAME = 3201, IDC_SETTINGS_DELAY, IDC_SETTINGS_FPS_ENABLE,
     IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE,
     IDC_RECORD_START = 3301, IDC_RECORD_STOP, IDC_RECORD_REPEAT, IDC_RECORD_GAP,
-    IDC_RECORD_LIST, IDC_RECORD_EVENTS,
+    IDC_RECORD_LIST, IDC_RECORD_EVENTS, IDC_RECORD_VM_MODE,
     IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL,
     IDC_EDITOR_START = 3501, IDC_EDITOR_STOP, IDC_EDITOR_NAME, IDC_EDITOR_SOURCE,
     IDC_EDITOR_EVENTS, IDC_EDITOR_SAVE
@@ -101,6 +101,7 @@ std::wstring g_trackedExePath;
 int g_activeRecording{-1};
 int g_syncFps{30};
 int g_playRepeat{1}, g_playGapSeconds{1};
+bool g_vmPlaybackMode{};
 HWND g_source{};
 bool g_sync{}, g_recording{}, g_blockMove{}, g_refreshingRecords{};
 std::atomic_bool g_playing{false}, g_playPaused{false};
@@ -523,12 +524,20 @@ struct PlaybackJob {
     std::vector<Target> targets;
     int repeat{1};
     int gapSeconds{1};
+    bool vmMode{};
 };
 
-bool PlaybackWait(DWORD milliseconds) {
+bool PlaybackWait(DWORD milliseconds, bool vmMode = false) {
     DWORD elapsed = 0;
     while (g_playing && elapsed < milliseconds) {
-        while (g_playing && g_playPaused) Sleep(20);
+        bool cursorReleased = false;
+        while (g_playing && g_playPaused) {
+            if (vmMode && !cursorReleased) {
+                ClipCursor(nullptr);
+                cursorReleased = true;
+            }
+            Sleep(20);
+        }
         if (!g_playing) return false;
         const DWORD slice = std::min<DWORD>(10, milliseconds - elapsed);
         Sleep(slice);
@@ -537,14 +546,108 @@ bool PlaybackWait(DWORD milliseconds) {
     return g_playing;
 }
 
+bool ActivatePlaybackTarget(HWND topLevel, HWND input) {
+    if (!IsWindow(topLevel) || !IsWindow(input)) return false;
+    ShowWindowAsync(topLevel, SW_RESTORE);
+    DWORD appThread = GetCurrentThreadId();
+    DWORD targetThread = GetWindowThreadProcessId(topLevel, nullptr);
+    const bool attached = targetThread && targetThread != appThread &&
+                          AttachThreadInput(appThread, targetThread, TRUE);
+    BringWindowToTop(topLevel);
+    SetForegroundWindow(topLevel);
+    SetActiveWindow(topLevel);
+    SetFocus(input);
+    if (attached) AttachThreadInput(appThread, targetThread, FALSE);
+    return GetAncestor(GetForegroundWindow(), GA_ROOT) == GetAncestor(topLevel, GA_ROOT);
+}
+
+POINT PlaybackScreenPoint(HWND target, const MacroEvent& event) {
+    RECT client{};
+    GetClientRect(target, &client);
+    POINT point{
+        std::clamp(static_cast<int>(event.nx * client.right), 0, std::max(0, client.right - 1)),
+        std::clamp(static_cast<int>(event.ny * client.bottom), 0, std::max(0, client.bottom - 1))
+    };
+    ClientToScreen(target, &point);
+    return point;
+}
+
+void LockGuestCursorAt(POINT point) {
+    RECT lock{point.x, point.y, point.x + 1, point.y + 1};
+    ClipCursor(&lock);
+    SetCursorPos(point.x, point.y);
+}
+
+void SendVmKey(WORD key, bool up) {
+    INPUT input{};
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = key;
+    input.ki.dwFlags = up ? KEYEVENTF_KEYUP : 0;
+    SendInput(1, &input, sizeof(input));
+}
+
+void SendVmMouse(DWORD flags, int wheel = 0) {
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = flags;
+    input.mi.mouseData = static_cast<DWORD>(wheel);
+    SendInput(1, &input, sizeof(input));
+}
+
+DWORD MouseDownFlag(UINT message) {
+    if (message == WM_RBUTTONDOWN) return MOUSEEVENTF_RIGHTDOWN;
+    if (message == WM_MBUTTONDOWN) return MOUSEEVENTF_MIDDLEDOWN;
+    return MOUSEEVENTF_LEFTDOWN;
+}
+
+DWORD MouseUpFlag(UINT message) {
+    if (message == WM_RBUTTONDOWN || message == WM_RBUTTONUP) return MOUSEEVENTF_RIGHTUP;
+    if (message == WM_MBUTTONDOWN || message == WM_MBUTTONUP) return MOUSEEVENTF_MIDDLEUP;
+    return MOUSEEVENTF_LEFTUP;
+}
+
+void PlayVmEvent(const PlaybackJob::Target& destination, const MacroEvent& event) {
+    if (!ActivatePlaybackTarget(destination.topLevel, destination.input)) return;
+    // Treat recorded down/up pairs as one atomic action per window. This avoids
+    // dragging the global guest cursor between windows while a button is held.
+    if (event.type == MacroType::KeyUp || event.type == MacroType::MouseUp) return;
+    if (event.type == MacroType::KeyDown) {
+        SendVmKey(static_cast<WORD>(event.data), false);
+        Sleep(20);
+        SendVmKey(static_cast<WORD>(event.data), true);
+        return;
+    }
+    POINT point = PlaybackScreenPoint(destination.input, event);
+    LockGuestCursorAt(point);
+    switch (event.type) {
+        case MacroType::MouseMove:
+            break;
+        case MacroType::MouseDown:
+        case MacroType::MouseClick:
+            SendVmMouse(MouseDownFlag(static_cast<UINT>(event.data)));
+            Sleep(35);
+            SendVmMouse(MouseUpFlag(static_cast<UINT>(event.data)));
+            break;
+        case MacroType::Wheel:
+            SendVmMouse(MOUSEEVENTF_WHEEL, event.wheel);
+            break;
+        default:
+            break;
+    }
+}
+
 DWORD WINAPI PlayThread(void* parameter) {
     std::unique_ptr<PlaybackJob> job(static_cast<PlaybackJob*>(parameter));
-    const int repeat = std::clamp(job->repeat, 1, 999999);
+    const int repeat = std::clamp(job->repeat, 1, 99999);
     for (int pass = 0; pass < repeat && g_playing; ++pass) {
         for (const auto& e : job->events) {
             if (!g_playing) break;
-            if (!PlaybackWait(e.delayMs)) break;
+            if (!PlaybackWait(e.delayMs, job->vmMode)) break;
             for (const auto& destination : job->targets) {
+                if (job->vmMode) {
+                    PlayVmEvent(destination, e);
+                    continue;
+                }
                 // The input control is captured once when playback starts.
                 // Never follow the foreground window and never use SendInput,
                 // SetCursorPos or focus activation while background auto-click runs.
@@ -589,8 +692,9 @@ DWORD WINAPI PlayThread(void* parameter) {
             }
         }
         if (g_playing && pass + 1 < repeat &&
-            !PlaybackWait(static_cast<DWORD>(std::clamp(job->gapSeconds, 0, 3600) * 1000))) break;
+            !PlaybackWait(static_cast<DWORD>(std::clamp(job->gapSeconds, 0, 3600) * 1000), job->vmMode)) break;
     }
+    if (job->vmMode) ClipCursor(nullptr);
     g_playing = false;
     g_playPaused = false;
     if (g_recordManager) PostMessageW(g_recordManager, WM_APP + 20, 0, 0);
@@ -928,8 +1032,9 @@ void ShowRecordEditor() {
 LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_CREATE: {
-            g_playRepeat = std::clamp(static_cast<int>(LoadSettingDword(L"RecordRepeat", 1)), 1, 999999);
+            g_playRepeat = std::clamp(static_cast<int>(LoadSettingDword(L"RecordRepeat", 1)), 1, 99999);
             g_playGapSeconds = std::clamp(static_cast<int>(LoadSettingDword(L"RecordGapSeconds", 1)), 0, 3600);
+            g_vmPlaybackMode = LoadSettingDword(L"VmPlaybackMode", 0) != 0;
             const std::wstring repeatText = std::to_wstring(g_playRepeat);
             const std::wstring gapText = std::to_wstring(g_playGapSeconds);
             auto button = [&](int id, const wchar_t* text, int x, int w) {
@@ -947,6 +1052,12 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", gapText.c_str(), WS_CHILD | WS_VISIBLE | ES_NUMBER,
                 72, 99, 52, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_GAP), g_instance, nullptr);
             CreateWindowW(L"STATIC", L"giây", WS_CHILD | WS_VISIBLE, 129, 102, 35, 22, hwnd, nullptr, g_instance, nullptr);
+            HWND vmMode = CreateWindowW(L"BUTTON", L"Chế độ máy ảo (khóa chuột)",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 8, 135, 155, 22, hwnd,
+                reinterpret_cast<HMENU>(IDC_RECORD_VM_MODE), g_instance, nullptr);
+            SendMessageW(vmMode, BM_SETCHECK, g_vmPlaybackMode ? BST_CHECKED : BST_UNCHECKED, 0);
+            CreateWindowW(L"STATIC", L"F8: Tạm dừng/Tiếp tục\r\nF9: Kết thúc và mở khóa",
+                WS_CHILD | WS_VISIBLE, 8, 162, 155, 42, hwnd, nullptr, g_instance, nullptr);
             g_recordList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                 166, 10, 225, 330, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_LIST), g_instance, nullptr);
             g_recordEvents = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT,
@@ -961,8 +1072,21 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             col(g_recordEvents, 0, 45, L"Stt"); col(g_recordEvents, 1, 115, L"Sự kiện");
             col(g_recordEvents, 2, 100, L"Giá trị"); col(g_recordEvents, 3, 90, L"Thời gian");
             RefreshRecordManager();
+            RegisterHotKey(hwnd, 1, MOD_NOREPEAT, VK_F8);
+            RegisterHotKey(hwnd, 2, MOD_NOREPEAT, VK_F9);
             return 0;
         }
+        case WM_HOTKEY:
+            if (wp == 1 && g_playing) {
+                g_playPaused = !g_playPaused.load();
+                SetWindowTextW(g_recordStartButton, g_playPaused ? L"Tiếp tục" : L"Tạm dừng");
+            } else if (wp == 2 && g_playing) {
+                g_playing = false;
+                g_playPaused = false;
+                ClipCursor(nullptr);
+                SetWindowTextW(g_recordStartButton, L"Bắt đầu");
+            }
+            return 0;
         case WM_NOTIFY: {
             auto* hdr = reinterpret_cast<NMHDR*>(lp);
             if (!g_refreshingRecords && hdr->idFrom == IDC_RECORD_LIST && hdr->code == LVN_ITEMCHANGED) {
@@ -1005,15 +1129,18 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     MessageBoxW(hwnd, L"Hãy chọn một bản ghi có sự kiện trước khi bắt đầu.", L"Quản lí bản ghi", MB_ICONINFORMATION);
                     return 0;
                 }
-                g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT), 1, 999999);
+                g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT), 1, 99999);
                 g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP), 0, 3600);
+                g_vmPlaybackMode = SendMessageW(GetDlgItem(hwnd, IDC_RECORD_VM_MODE), BM_GETCHECK, 0, 0) == BST_CHECKED;
                 SaveSettingDword(L"RecordRepeat", static_cast<DWORD>(g_playRepeat));
                 SaveSettingDword(L"RecordGapSeconds", static_cast<DWORD>(g_playGapSeconds));
+                SaveSettingDword(L"VmPlaybackMode", g_vmPlaybackMode ? 1 : 0);
                 SyncChecksFromList();
                 auto job = std::make_unique<PlaybackJob>();
                 job->events = g_macro;
                 job->repeat = g_playRepeat;
                 job->gapSeconds = g_playGapSeconds;
+                job->vmMode = g_vmPlaybackMode;
                 for (const auto& window : g_windows) {
                     if (!window.selected || !IsWindow(window.hwnd)) continue;
                     if (HWND input = InputTarget(window.hwnd)) job->targets.push_back({window.hwnd, input});
@@ -1037,6 +1164,7 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             } else if (id == IDC_RECORD_STOP) {
                 g_playing = false;
                 g_playPaused = false;
+                ClipCursor(nullptr);
                 SetWindowTextW(g_recordStartButton, L"Bắt đầu");
                 if (g_recording) ToggleRecord();
                 RefreshRecordManager();
@@ -1059,12 +1187,17 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 wchar_t repeatText[32]{}, gapText[32]{};
                 GetWindowTextW(GetDlgItem(hwnd, IDC_RECORD_REPEAT), repeatText, 32);
                 GetWindowTextW(GetDlgItem(hwnd, IDC_RECORD_GAP), gapText, 32);
-                const DWORD repeat = static_cast<DWORD>(std::clamp(_wtoi(repeatText), 1, 999999));
+                const DWORD repeat = static_cast<DWORD>(std::clamp(_wtoi(repeatText), 1, 99999));
                 const DWORD gap = static_cast<DWORD>(std::clamp(_wtoi(gapText), 0, 3600));
                 SaveSettingDword(L"RecordRepeat", repeat);
                 SaveSettingDword(L"RecordGapSeconds", gap);
+                g_vmPlaybackMode = SendMessageW(GetDlgItem(hwnd, IDC_RECORD_VM_MODE), BM_GETCHECK, 0, 0) == BST_CHECKED;
+                SaveSettingDword(L"VmPlaybackMode", g_vmPlaybackMode ? 1 : 0);
             }
             g_playing = false; g_playPaused = false;
+            ClipCursor(nullptr);
+            UnregisterHotKey(hwnd, 1);
+            UnregisterHotKey(hwnd, 2);
             g_recordManager = g_recordList = g_recordEvents = g_recordStartButton = nullptr;
             return 0;
     }
