@@ -46,7 +46,7 @@ Có thể nhấp chuột phải vào bất kỳ dòng `ONLINE` nào rồi chọn
 
 Khi chọn **Đồng bộ → Chọn tất cả**, các cửa sổ được đánh số lại từ trên xuống. Phần mềm gửi thông điệp bàn phím/chuột tới control đang nhận focus bên trong mỗi cửa sổ game, giúp các game Win32 nhận thao tác nền ổn định hơn.
 
-Khi bấm **Bật đồng bộ**, phần mềm tự khôi phục, đưa cửa sổ chính lên trên và chuyển focus vào vùng game. Sự kiện chuột di chuyển được giới hạn ở 60 lần/giây để tránh đầy hàng đợi thông điệp; các thao tác quan trọng như nhấn/thả chuột, cuộn và phím được gửi đồng bộ với kiểm tra timeout để giảm mất thao tác.
+Ngay khi chọn **Làm cửa sổ chính**, phần mềm khôi phục, đưa cửa sổ đó lên trên và chuyển focus vào vùng game. Khi bấm **Bật đồng bộ**, thao tác nhấn/thả chuột và phím được xếp vào hàng đợi của tất cả cửa sổ đích mà không chờ tuần tự từng cửa sổ; nhờ đó một cửa sổ phản hồi chậm không làm các cửa sổ sau bị trễ. Tọa độ chuột được quy đổi theo đúng vùng điều khiển/render đang nhận focus của từng cửa sổ. Chuột di chuyển vẫn được giới hạn ở 60 lần/giây để tránh đầy hàng đợi thông điệp.
 
 ### Mở nhiều cửa sổ
 
