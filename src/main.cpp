@@ -554,16 +554,33 @@ DWORD WINAPI PlayThread(void* parameter) {
                     case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
                     case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
                     case MacroType::MouseMove: PostMessageW(target, WM_MOUSEMOVE, 0, ScaledPoint(target, e.nx, e.ny)); break;
-                    case MacroType::MouseDown: PostMessageW(target, e.data, e.data == WM_LBUTTONDOWN ? MK_LBUTTON : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON, ScaledPoint(target, e.nx, e.ny)); break;
-                    case MacroType::MouseUp: PostMessageW(target, e.data, 0, ScaledPoint(target, e.nx, e.ny)); break;
+                    case MacroType::MouseDown: {
+                        const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        // Prime the game's internal hover position without
+                        // moving or showing the real Windows cursor.
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
+                        PostMessageW(target, e.data,
+                            e.data == WM_LBUTTONDOWN ? MK_LBUTTON :
+                            e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON,
+                            point);
+                        break;
+                    }
+                    case MacroType::MouseUp: {
+                        const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
+                        PostMessageW(target, e.data, 0, point);
+                        break;
+                    }
                     case MacroType::MouseClick: {
                         const UINT upMessage = e.data == WM_LBUTTONDOWN ? WM_LBUTTONUP
                                              : e.data == WM_RBUTTONDOWN ? WM_RBUTTONUP : WM_MBUTTONUP;
                         const WPARAM button = e.data == WM_LBUTTONDOWN ? MK_LBUTTON
                                              : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON;
                         const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
                         PostMessageW(target, e.data, button, point);
                         Sleep(40);
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
                         PostMessageW(target, upMessage, 0, point);
                         break;
                     }
