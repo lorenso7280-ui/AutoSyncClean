@@ -13,6 +13,7 @@
 - Tự lưu đường dẫn game, tham số, số lượng và thời gian giãn cách cho lần sử dụng sau.
 - Chọn/bỏ chọn từng cửa sổ bằng checkbox.
 - Đặt một cửa sổ làm cửa sổ chính bằng nút **Cửa sổ chính**, nhấp đúp hoặc menu chuột phải.
+- Nhấp phải trực tiếp vào một dòng và chọn **Làm cửa sổ chính**; dòng nguồn được đánh dấu `★ [CỬA SỔ CHÍNH]` ở tiêu đề và trạng thái.
 - Đồng bộ phím xuống/lên, chuột trái/phải/giữa, di chuyển và cuộn.
 - Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
 - Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
@@ -38,6 +39,8 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 3. Chọn cửa sổ nguồn và bấm **Cửa sổ chính**.
 4. Bấm **Bật đồng bộ**, sau đó thao tác bên trong cửa sổ chính.
 5. Bấm **Tắt đồng bộ** khi hoàn tất.
+
+Có thể nhấp chuột phải vào bất kỳ dòng `ONLINE` nào rồi chọn **Làm cửa sổ chính**. Khi đồng bộ bật, phím và chuột chỉ được lấy từ cửa sổ có dấu `★`; thao tác được gửi tới các cửa sổ còn lại đã tích checkbox và không gửi ngược lại cửa sổ chính.
 
 ### Mở nhiều cửa sổ
 
