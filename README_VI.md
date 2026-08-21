@@ -34,6 +34,8 @@
 - Khi bấm **Kết thúc**, cột **Giá trị** hiển thị tọa độ pixel rõ ràng theo dạng `X: …, Y: …` của từng click trong cửa sổ đã chọn; sự kiện bàn phím hiển thị mã phím. Hộp nguồn dùng font Unicode và luôn ghi đúng `Cửa sổ 1`, `Cửa sổ 2`…
 - Bàn phím, cuộn chuột và các click tiếp theo vẫn được ghi theo đúng thứ tự/thời gian. Nhập tên rồi bấm **Lưu**; chỉ bản ghi đã lưu mới xuất hiện trong danh sách với đuôi `.json`.
 - Trong cửa sổ quản lí, **Bắt đầu** phát bản ghi đang chọn theo số lần lặp/giãn cách và lập tức đổi thành **Tạm dừng**. Bấm **Tạm dừng** sẽ giữ nguyên vị trí phát và đổi thành **Tiếp tục**; bấm **Kết thúc** dừng hẳn và đưa nút về **Bắt đầu**.
+- Giá trị **Lặp lại** và **Giãn cách** được lưu cho lần mở sau (ví dụ nhập `99999` thì lần sau vẫn hiện `99999`). Checkbox trong danh sách chọn đúng một bản ghi để auto-click; bản ghi vừa lưu được tự động chọn.
+- Mở **Quản lí bản ghi** hoặc **Thêm bản ghi** sẽ tự tắt Đồng bộ. Ghi và phát auto-click hoạt động độc lập, không yêu cầu bật Đồng bộ và không phát thao tác trực tiếp trong lúc đang tạo bản ghi.
 - Trước khi phát, chương trình chụp cố định bản ghi và danh sách mọi cửa sổ `ONLINE` đã tích checkbox (bao gồm cửa sổ nguồn nếu được tích), rồi luồng nền chỉ dùng bản chụp đó. Giao diện thay đổi trong lúc phát không còn làm sai thứ tự hoặc bỏ sót cửa sổ.
 - Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Phát lại dùng thông điệp nền, không di chuyển hoặc khóa con trỏ thật; người dùng vẫn có thể sử dụng chuột và bàn phím của máy tính bình thường.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
