@@ -27,7 +27,8 @@
 - Nút `Ⓡ` mở menu bắt đầu/dừng, phát hoặc xóa bản ghi; nhấp phải vào vùng trống của danh sách cũng mở menu này.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
-- **Hiện tất cả** và **Đóng tất cả** áp dụng cho mọi dòng đã tích, bao gồm cả cửa sổ chính; lệnh đóng tự tắt đồng bộ trước.
+- **Đóng tất cả** áp dụng cho mọi cửa sổ game `ONLINE`, bao gồm cửa sổ chính và không phụ thuộc checkbox. Phần mềm gửi lệnh đóng đồng thời, chờ 300 ms rồi buộc kết thúc đúng các tiến trình game vẫn không phản hồi; lệnh này tự tắt đồng bộ trước và có thể làm mất dữ liệu game chưa lưu.
+- **Hiện tất cả** tiếp tục áp dụng cho những dòng đã tích checkbox.
 
 ## Biên dịch
 
