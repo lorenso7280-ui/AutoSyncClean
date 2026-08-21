@@ -36,7 +36,9 @@ enum : int {
     IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE,
     IDC_RECORD_START = 3301, IDC_RECORD_STOP, IDC_RECORD_REPEAT, IDC_RECORD_GAP,
     IDC_RECORD_LIST, IDC_RECORD_EVENTS,
-    IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL
+    IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL,
+    IDC_EDITOR_START = 3501, IDC_EDITOR_STOP, IDC_EDITOR_NAME, IDC_EDITOR_SOURCE,
+    IDC_EDITOR_EVENTS, IDC_EDITOR_SAVE
 };
 
 enum : int {
@@ -84,6 +86,7 @@ HWND g_launcher{};
 HWND g_arranger{};
 HWND g_thumbnailViewer{};
 HWND g_settingsWindow{}, g_recordManager{}, g_recordList{}, g_recordEvents{};
+HWND g_recordEditor{}, g_editorEvents{}, g_editorName{}, g_editorSource{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
@@ -361,16 +364,18 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
         g_lastMouseMoveBroadcast = now;
     }
     const bool critical = msg != WM_MOUSEMOVE;
-    ForTargets([&](HWND h) {
-        HWND target = InputTarget(h);
-        if (target) DeliverInput(h, msg, wp, ScaledPoint(target, nx, ny), critical);
-    });
+    if (g_sync) {
+        ForTargets([&](HWND h) {
+            HWND target = InputTarget(h);
+            if (target) DeliverInput(h, msg, wp, ScaledPoint(target, nx, ny), critical);
+        });
+    }
     MacroEvent e{mt, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0};
     AddMacro(e);
 }
 
 LRESULT CALLBACK MouseHook(int code, WPARAM wp, LPARAM lp) {
-    if (code == HC_ACTION && g_sync && !g_playing) {
+    if (code == HC_ACTION && (g_sync || g_recording) && !g_playing) {
         auto* m = reinterpret_cast<MSLLHOOKSTRUCT*>(lp);
         if (!(m->flags & LLMHF_INJECTED)) SendMouse(static_cast<UINT>(wp), m);
     }
@@ -378,7 +383,7 @@ LRESULT CALLBACK MouseHook(int code, WPARAM wp, LPARAM lp) {
 }
 
 LRESULT CALLBACK KeyboardHook(int code, WPARAM wp, LPARAM lp) {
-    if (code == HC_ACTION && g_sync && !g_playing) {
+    if (code == HC_ACTION && (g_sync || g_recording) && !g_playing) {
         auto* k = reinterpret_cast<KBDLLHOOKSTRUCT*>(lp);
         if (!(k->flags & LLKHF_INJECTED)) {
             HWND fg = GetForegroundWindow();
@@ -387,9 +392,11 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wp, LPARAM lp) {
                 LPARAM keyData = 1 | (static_cast<LPARAM>(k->scanCode) << 16);
                 if (k->flags & LLKHF_EXTENDED) keyData |= 1LL << 24;
                 if (msg == WM_KEYUP || msg == WM_SYSKEYUP) keyData |= (1LL << 30) | (1LL << 31);
-                ForTargets([&](HWND h) {
-                    DeliverInput(h, msg, k->vkCode, keyData, true);
-                });
+                if (g_sync) {
+                    ForTargets([&](HWND h) {
+                        DeliverInput(h, msg, k->vkCode, keyData, true);
+                    });
+                }
                 AddMacro({(msg == WM_KEYUP || msg == WM_SYSKEYUP) ? MacroType::KeyUp : MacroType::KeyDown,
                           k->vkCode, 0, 0, 0, 0});
             }
@@ -407,8 +414,8 @@ void SetSync(bool on) {
     g_sync = on;
     SetWindowTextW(g_btnSync, on ? L"■ Tắt đồng bộ" : L"⟳ Bật đồng bộ");
     if (on) {
-        g_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardHook, g_instance, 0);
-        g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, MouseHook, g_instance, 0);
+        if (!g_keyboardHook) g_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardHook, g_instance, 0);
+        if (!g_mouseHook) g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, MouseHook, g_instance, 0);
         if (!g_keyboardHook || !g_mouseHook) {
             MessageBoxW(g_main, L"Không thể cài hook. Hãy thử chạy bằng quyền Administrator nếu cửa sổ đích đang chạy quyền cao.", kTitle, MB_ICONERROR);
             g_sync = false;
@@ -418,9 +425,11 @@ void SetSync(bool on) {
             ActivateSourceWindow();
         }
     } else {
-        if (g_keyboardHook) UnhookWindowsHookEx(g_keyboardHook);
-        if (g_mouseHook) UnhookWindowsHookEx(g_mouseHook);
-        g_keyboardHook = g_mouseHook = nullptr;
+        if (!g_recording) {
+            if (g_keyboardHook) UnhookWindowsHookEx(g_keyboardHook);
+            if (g_mouseHook) UnhookWindowsHookEx(g_mouseHook);
+            g_keyboardHook = g_mouseHook = nullptr;
+        }
     }
     RebuildList();
     if (g_sync && g_source)
@@ -506,12 +515,21 @@ void ToggleRecord() {
         g_macro.clear();
         g_lastMacro = std::chrono::steady_clock::now();
         SetWindowTextW(b, L"■ Dừng ghi");
-        if (!g_sync) SetSync(true);
-        SetStatus(L"Đang ghi chuỗi thao tác...");
+        if (!g_keyboardHook) g_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardHook, g_instance, 0);
+        if (!g_mouseHook) g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, MouseHook, g_instance, 0);
+        if (!g_keyboardHook || !g_mouseHook) {
+            g_recording = false;
+            MessageBoxW(g_main, L"Không thể bắt đầu ghi thao tác. Hãy thử chạy bằng quyền Administrator.", kTitle, MB_ICONERROR);
+            return;
+        }
+        SetStatus(L"Đang ghi thao tác độc lập; không phát sang cửa sổ khác.");
     } else {
         SetWindowTextW(b, L"● Ghi thao tác");
-        if (g_activeRecording >= 0 && g_activeRecording < static_cast<int>(g_recordings.size()))
-            g_recordings[static_cast<size_t>(g_activeRecording)].events = g_macro;
+        if (!g_sync) {
+            if (g_keyboardHook) UnhookWindowsHookEx(g_keyboardHook);
+            if (g_mouseHook) UnhookWindowsHookEx(g_mouseHook);
+            g_keyboardHook = g_mouseHook = nullptr;
+        }
         SetStatus(L"Đã ghi " + std::to_wstring(g_macro.size()) + L" sự kiện.");
     }
 }
@@ -654,6 +672,115 @@ void AddRecording() {
     g_macro.clear(); RefreshRecordManager();
 }
 
+void RefreshEditorEvents() {
+    if (!g_editorEvents) return;
+    ListView_DeleteAllItems(g_editorEvents);
+    for (size_t i = 0; i < g_macro.size(); ++i) {
+        LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
+        auto number = std::to_wstring(i + 1); item.pszText = number.data();
+        int row = ListView_InsertItem(g_editorEvents, &item);
+        auto type = std::wstring(MacroTypeName(g_macro[i].type));
+        ListView_SetItemText(g_editorEvents, row, 1, type.data());
+        auto value = std::to_wstring(g_macro[i].data);
+        ListView_SetItemText(g_editorEvents, row, 2, value.data());
+        auto delay = std::to_wstring(g_macro[i].delayMs) + L" ms";
+        ListView_SetItemText(g_editorEvents, row, 3, delay.data());
+    }
+}
+
+LRESULT CALLBACK RecordEditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CREATE: {
+            auto makeButton = [&](int id, const wchar_t* text, int x, int w) {
+                HWND c = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE, x, 12, w, 25, hwnd,
+                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            };
+            makeButton(IDC_EDITOR_START, L"Bắt đầu", 8, 72);
+            makeButton(IDC_EDITOR_STOP, L"Kết thúc", 86, 76);
+            makeButton(IDC_EDITOR_SAVE, L"Lưu", 366, 72);
+            CreateWindowW(L"STATIC", L"[+] Đặt tên bản ghi:", WS_CHILD | WS_VISIBLE,
+                8, 55, 145, 22, hwnd, nullptr, g_instance, nullptr);
+            g_editorName = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE,
+                158, 52, 280, 24, hwnd, reinterpret_cast<HMENU>(IDC_EDITOR_NAME), g_instance, nullptr);
+            CreateWindowW(L"STATIC", L"[+] Chọn cửa sổ cần ghi lại thao tác:", WS_CHILD | WS_VISIBLE,
+                8, 88, 245, 22, hwnd, nullptr, g_instance, nullptr);
+            g_editorSource = CreateWindowW(WC_COMBOBOXW, L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
+                255, 84, 185, 250, hwnd, reinterpret_cast<HMENU>(IDC_EDITOR_SOURCE), g_instance, nullptr);
+            for (const auto& window : g_windows) {
+                if (!IsWindow(window.hwnd)) continue;
+                int index = ComboBox_AddString(g_editorSource, window.title.c_str());
+                ComboBox_SetItemData(g_editorSource, index, reinterpret_cast<LPARAM>(window.hwnd));
+            }
+            if (ComboBox_GetCount(g_editorSource) > 0) ComboBox_SetCurSel(g_editorSource, 0);
+            g_editorEvents = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT,
+                8, 122, 430, 260, hwnd, reinterpret_cast<HMENU>(IDC_EDITOR_EVENTS), g_instance, nullptr);
+            ListView_SetExtendedListViewStyle(g_editorEvents, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+            auto col = [](HWND list, int index, int width, const wchar_t* text) {
+                LVCOLUMNW c{sizeof(c)}; c.mask = LVCF_TEXT | LVCF_WIDTH; c.cx = width; c.pszText = const_cast<wchar_t*>(text);
+                ListView_InsertColumn(list, index, &c);
+            };
+            col(g_editorEvents, 0, 45, L"Stt"); col(g_editorEvents, 1, 130, L"Sự kiện");
+            col(g_editorEvents, 2, 110, L"Giá trị"); col(g_editorEvents, 3, 120, L"Thời gian");
+            g_macro.clear();
+            return 0;
+        }
+        case WM_COMMAND: {
+            const int id = LOWORD(wp);
+            if (id == IDC_EDITOR_START) {
+                int index = ComboBox_GetCurSel(g_editorSource);
+                if (index < 0) {
+                    MessageBoxW(hwnd, L"Không có cửa sổ game ONLINE để ghi thao tác.", L"Ghi lại thao tác", MB_ICONINFORMATION);
+                    return 0;
+                }
+                g_source = reinterpret_cast<HWND>(ComboBox_GetItemData(g_editorSource, index));
+                ActivateSourceWindow();
+                if (!g_recording) ToggleRecord();
+            } else if (id == IDC_EDITOR_STOP) {
+                if (g_recording) ToggleRecord();
+                RefreshEditorEvents();
+            } else if (id == IDC_EDITOR_SAVE) {
+                if (g_recording) ToggleRecord();
+                wchar_t name[260]{}; GetWindowTextW(g_editorName, name, 260);
+                if (!name[0]) {
+                    MessageBoxW(hwnd, L"Hãy đặt tên bản ghi trước khi lưu.", L"Ghi lại thao tác", MB_ICONINFORMATION);
+                    return 0;
+                }
+                std::wstring filename = name;
+                if (filename.size() < 5 || filename.substr(filename.size() - 5) != L".json") filename += L".json";
+                g_recordings.push_back({filename, g_macro});
+                g_activeRecording = static_cast<int>(g_recordings.size()) - 1;
+                RefreshRecordManager();
+                DestroyWindow(hwnd);
+            }
+            return 0;
+        }
+        case WM_TIMER:
+            RefreshEditorEvents(); return 0;
+        case WM_DESTROY:
+            if (g_recording) ToggleRecord();
+            KillTimer(hwnd, 1);
+            g_recordEditor = g_editorEvents = g_editorName = g_editorSource = nullptr;
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void ShowRecordEditor() {
+    if (g_recordEditor) { ShowWindow(g_recordEditor, SW_RESTORE); SetForegroundWindow(g_recordEditor); return; }
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = RecordEditorProc; wc.hInstance = g_instance;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.lpszClassName = L"AutoSyncClean.RecordEditor"; RegisterClassExW(&wc); registered = true;
+    }
+    RECT manager{}; GetWindowRect(g_recordManager, &manager);
+    g_recordEditor = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.RecordEditor", L"Ghi lại thao tác",
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, manager.right - 370, manager.top + 35, 465, 435,
+        g_recordManager, nullptr, g_instance, nullptr);
+    if (g_recordEditor) { SetTimer(g_recordEditor, 1, 250, nullptr); ShowWindow(g_recordEditor, SW_SHOW); UpdateWindow(g_recordEditor); }
+}
+
 LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_CREATE: {
@@ -684,7 +811,7 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             col(g_recordList, 0, 28, L"#"); col(g_recordList, 1, 190, L"Tên bản ghi");
             col(g_recordEvents, 0, 45, L"Stt"); col(g_recordEvents, 1, 115, L"Sự kiện");
             col(g_recordEvents, 2, 100, L"Giá trị"); col(g_recordEvents, 3, 90, L"Thời gian");
-            if (g_recordings.empty()) AddRecording(); else RefreshRecordManager();
+            RefreshRecordManager();
             return 0;
         }
         case WM_NOTIFY: {
@@ -715,7 +842,10 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 int value = _wtoi(text); return value > 0 ? value : fallback;
             };
             if (id == IDC_RECORD_START) {
-                if (g_activeRecording < 0) AddRecording();
+                if (g_activeRecording < 0 || g_macro.empty()) {
+                    MessageBoxW(hwnd, L"Hãy chọn một bản ghi có sự kiện trước khi bắt đầu.", L"Quản lí bản ghi", MB_ICONINFORMATION);
+                    return 0;
+                }
                 g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT, 1), 1, 999999);
                 g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP, 1), 0, 3600);
                 if (!g_macro.empty() && !g_playing)
@@ -724,10 +854,7 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g_playing = false;
                 if (g_recording) ToggleRecord();
                 RefreshRecordManager();
-            } else if (id == IDM_RECORD_ADD) {
-                AddRecording();
-                if (!g_recording) ToggleRecord();
-            }
+            } else if (id == IDM_RECORD_ADD) ShowRecordEditor();
             else if (id == IDM_RECORD_DELETE && g_activeRecording >= 0) {
                 g_recordings.erase(g_recordings.begin() + g_activeRecording);
                 g_activeRecording = g_recordings.empty() ? -1 : std::min(g_activeRecording, static_cast<int>(g_recordings.size()) - 1);
