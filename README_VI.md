@@ -99,7 +99,7 @@ Nút Proxy `◉` giải thích và dẫn người dùng tới phương thức c�
 ### Xếp chồng và di chuyển cửa sổ
 
 1. Bấm nút biểu tượng lưới ở góc trên bên phải. Tất cả cửa sổ game `ONLINE` sẽ được áp dụng, không cần đánh dấu checkbox.
-2. Nhập kích thước vùng game, vị trí cách mép trái `X` và cách mép trên `Y`.
+2. Nhập kích thước toàn bộ cửa sổ game, vị trí cách mép trái `X` và cách mép trên `Y`. Giá trị `960 × 540` bao gồm cả thanh tiêu đề và đường viền, giống cách phần mềm mẫu đo và hiển thị.
 3. Đặt độ lệch mỗi cửa sổ `X = 0`, `Y = 0` để các cửa sổ chồng khít và nhìn như một cửa sổ duy nhất.
 4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
 5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
