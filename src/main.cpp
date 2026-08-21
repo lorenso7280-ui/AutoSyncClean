@@ -43,7 +43,7 @@ enum : int {
 struct WindowItem {
     HWND hwnd{};
     std::wstring title;
-    bool selected{true};
+    bool selected{};
 };
 
 struct ThumbnailItem {
@@ -194,7 +194,7 @@ BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
             const bool trackedGroup = std::any_of(g_windows.begin(), g_windows.end(), [&](const auto& w) {
                 return w.title == title;
             });
-            if (trackedGroup) g_windows.push_back({hwnd, title, true});
+            if (trackedGroup) g_windows.push_back({hwnd, title, false});
         }
     } else it->title = title;
     return TRUE;
@@ -875,9 +875,9 @@ void AcceptPickedWindow(HWND target) {
         item = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& window) {
             return !IsWindow(window.hwnd) && window.title == title;
         });
-        if (item == g_windows.end()) g_windows.push_back({target, title, true});
-        else { item->hwnd = target; item->selected = true; }
-    } else item->selected = true;
+        if (item == g_windows.end()) g_windows.push_back({target, title, false});
+        else item->hwnd = target;
+    }
     g_ignored.erase(target);
     RebuildList();
     RefreshThumbnailViewer(true);
