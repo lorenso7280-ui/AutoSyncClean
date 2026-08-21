@@ -18,6 +18,7 @@
 - Đặt một cửa sổ làm cửa sổ chính bằng nút **Cửa sổ chính**, nhấp đúp hoặc menu chuột phải.
 - Nhấp phải trực tiếp vào một dòng và chọn **Làm cửa sổ chính**; dòng nguồn được đánh dấu `★ [CỬA SỔ CHÍNH]` ở tiêu đề và trạng thái.
 - Đồng bộ phím xuống/lên, chuột trái/phải/giữa, di chuyển và cuộn.
+- Nhận cả click do phần mềm ngoài như **GS Auto Clicker** tạo ra trong Cửa sổ chính. AutoSyncClean chỉ bỏ qua input mang mã nội bộ của chính nó, vì vậy click tự động được phát tới mọi cửa sổ đang tích chọn mà không tạo vòng lặp.
 - Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
 - Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
 - Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
