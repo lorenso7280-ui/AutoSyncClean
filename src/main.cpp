@@ -187,8 +187,8 @@ std::wstring HexHandle(HWND hwnd) {
 
 std::wstring WindowSize(HWND hwnd) {
     RECT r{};
-    if (!GetClientRect(hwnd, &r)) return L"-";
-    return std::to_wstring(r.right) + L"x" + std::to_wstring(r.bottom);
+    if (!GetWindowRect(hwnd, &r)) return L"-";
+    return std::to_wstring(r.right - r.left) + L"x" + std::to_wstring(r.bottom - r.top);
 }
 
 void SetStatus(const std::wstring& text) {
@@ -1503,12 +1503,12 @@ void ArrangeOverlapped(const ArrangeRequest& request) {
         int outerWidth = current.right - current.left;
         int outerHeight = current.bottom - current.top;
         if (!request.keepSize) {
-            RECT desired{0, 0, request.width, request.height};
-            DWORD style = static_cast<DWORD>(GetWindowLongPtrW(target, GWL_STYLE));
-            DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(target, GWL_EXSTYLE));
-            AdjustWindowRectEx(&desired, style, GetMenu(target) != nullptr, exStyle);
-            outerWidth = desired.right - desired.left;
-            outerHeight = desired.bottom - desired.top;
+            // The reference application treats 960x540 as the complete outer
+            // window size (including title bar and borders), not the client
+            // render area. Apply those values directly so both arrangement
+            // and the size column match the reference.
+            outerWidth = request.width;
+            outerHeight = request.height;
         }
         int x = request.x + static_cast<int>(i) * request.offsetX;
         int y = request.y + static_cast<int>(i) * request.offsetY;
@@ -1559,7 +1559,7 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HWND keep = CreateWindowW(L"BUTTON", L"Không thay đổi kích thước hiện tại", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                                       18, 47, 250, 22, hwnd, reinterpret_cast<HMENU>(IDC_ARRANGE_KEEP_SIZE), g_instance, nullptr);
             SendMessageW(keep, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
-            label(L"Kích thước vùng game:", 18, 83, 150); edit(IDC_ARRANGE_WIDTH, L"960", 174, 80, 68);
+            label(L"Kích thước cửa sổ:", 18, 83, 150); edit(IDC_ARRANGE_WIDTH, L"960", 174, 80, 68);
             label(L"×", 249, 83, 18); edit(IDC_ARRANGE_HEIGHT, L"540", 270, 80, 68);
             label(L"Vị trí cách trái (X):", 18, 119, 150); edit(IDC_ARRANGE_X, L"0", 174, 116, 68); label(L"Pixel", 250, 119, 45);
             label(L"Vị trí cách trên (Y):", 18, 155, 150); edit(IDC_ARRANGE_Y, L"20", 174, 152, 68); label(L"Pixel", 250, 155, 45);
