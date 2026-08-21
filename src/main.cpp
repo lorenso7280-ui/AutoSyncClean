@@ -65,7 +65,7 @@ struct ThumbnailItem {
     RECT destination{};
 };
 
-enum class MacroType { KeyDown, KeyUp, MouseMove, MouseDown, MouseUp, Wheel };
+enum class MacroType { KeyDown, KeyUp, MouseMove, MouseDown, MouseUp, MouseClick, Wheel };
 struct MacroEvent {
     MacroType type{};
     DWORD data{};
@@ -379,8 +379,18 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
             if (target) DeliverInput(h, msg, wp, ScaledPoint(target, nx, ny), critical);
         });
     }
-    MacroEvent e{mt, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0};
-    AddMacro(e);
+    // A recording is an action script, not a raw mouse trace. Do not store
+    // cursor movement or the separate down/up halves of a click: one physical
+    // click must become exactly one stable playback action.
+    if (g_recording) {
+        if (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP || msg == WM_MBUTTONUP) {
+            UINT downMessage = msg == WM_LBUTTONUP ? WM_LBUTTONDOWN
+                             : msg == WM_RBUTTONUP ? WM_RBUTTONDOWN : WM_MBUTTONDOWN;
+            AddMacro({MacroType::MouseClick, downMessage, nx, ny, 0, 0});
+        } else if (msg == WM_MOUSEWHEEL) {
+            AddMacro({MacroType::Wheel, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0});
+        }
+    }
 }
 
 LRESULT CALLBACK MouseHook(int code, WPARAM wp, LPARAM lp) {
@@ -506,6 +516,16 @@ DWORD WINAPI PlayThread(void*) {
                     case MacroType::MouseMove: PostMessageW(h, WM_MOUSEMOVE, 0, ScaledPoint(h, e.nx, e.ny)); break;
                     case MacroType::MouseDown: PostMessageW(h, e.data, e.data == WM_LBUTTONDOWN ? MK_LBUTTON : MK_RBUTTON, ScaledPoint(h, e.nx, e.ny)); break;
                     case MacroType::MouseUp: PostMessageW(h, e.data, 0, ScaledPoint(h, e.nx, e.ny)); break;
+                    case MacroType::MouseClick: {
+                        const UINT upMessage = e.data == WM_LBUTTONDOWN ? WM_LBUTTONUP
+                                             : e.data == WM_RBUTTONDOWN ? WM_RBUTTONUP : WM_MBUTTONUP;
+                        const WPARAM button = e.data == WM_LBUTTONDOWN ? MK_LBUTTON
+                                             : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON;
+                        const LPARAM point = ScaledPoint(h, e.nx, e.ny);
+                        PostMessageW(h, e.data, button, point);
+                        PostMessageW(h, upMessage, 0, point);
+                        break;
+                    }
                     case MacroType::Wheel: PostMessageW(h, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(h, e.nx, e.ny)); break;
                 }
             });
@@ -644,6 +664,7 @@ const wchar_t* MacroTypeName(MacroType type) {
         case MacroType::MouseMove: return L"Di chuyển chuột";
         case MacroType::MouseDown: return L"Nhấn chuột";
         case MacroType::MouseUp: return L"Thả chuột";
+        case MacroType::MouseClick: return L"Click chuột";
         case MacroType::Wheel: return L"Cuộn chuột";
     }
     return L"";
@@ -716,9 +737,11 @@ LRESULT CALLBACK RecordEditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 8, 88, 245, 22, hwnd, nullptr, g_instance, nullptr);
             g_editorSource = CreateWindowW(WC_COMBOBOXW, L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
                 255, 84, 185, 250, hwnd, reinterpret_cast<HMENU>(IDC_EDITOR_SOURCE), g_instance, nullptr);
-            for (const auto& window : g_windows) {
+            for (size_t i = 0; i < g_windows.size(); ++i) {
+                const auto& window = g_windows[i];
                 if (!IsWindow(window.hwnd)) continue;
-                int index = ComboBox_AddString(g_editorSource, window.title.c_str());
+                const std::wstring displayName = L"Cửa sổ " + std::to_wstring(i + 1);
+                int index = ComboBox_AddString(g_editorSource, displayName.c_str());
                 ComboBox_SetItemData(g_editorSource, index, reinterpret_cast<LPARAM>(window.hwnd));
             }
             if (ComboBox_GetCount(g_editorSource) > 0) ComboBox_SetCurSel(g_editorSource, 0);
@@ -743,6 +766,12 @@ LRESULT CALLBACK RecordEditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     return 0;
                 }
                 g_source = reinterpret_cast<HWND>(ComboBox_GetItemData(g_editorSource, index));
+                if (!IsWindow(g_source)) {
+                    MessageBoxW(hwnd, L"Cửa sổ đã chọn đang OFFLINE. Hãy chọn một cửa sổ ONLINE.", L"Ghi lại thao tác", MB_ICONINFORMATION);
+                    return 0;
+                }
+                g_macro.clear();
+                RefreshEditorEvents();
                 ActivateSourceWindow();
                 if (!g_recording) ToggleRecord();
             } else if (id == IDC_EDITOR_STOP) {
