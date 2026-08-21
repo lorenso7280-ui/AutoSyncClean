@@ -21,6 +21,7 @@
 - Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
+- **Hiện tất cả** và **Đóng tất cả** áp dụng cho mọi dòng đã tích, bao gồm cả cửa sổ chính; lệnh đóng tự tắt đồng bộ trước.
 
 ## Biên dịch
 
