@@ -234,11 +234,18 @@ void SyncChecksFromList() {
         g_windows[static_cast<size_t>(i)].selected = ListView_GetCheckState(g_list, i) != FALSE;
 }
 
+HWND InputTarget(HWND topLevel);
+
 bool PointInSource(POINT screen, POINT& client, RECT& rc) {
     HWND source = g_source ? g_source : GetForegroundWindow();
     if (!source || source == g_main) return false;
     HWND foreground = GetForegroundWindow();
     if (g_source && GetAncestor(foreground, GA_ROOT) != GetAncestor(g_source, GA_ROOT)) return false;
+    // Mouse messages are delivered to the focused render/control window, not
+    // necessarily to the top-level frame.  Measure the source point in that
+    // same coordinate space so WebView/DirectX child controls map correctly.
+    source = InputTarget(source);
+    if (!source) return false;
     client = screen;
     ScreenToClient(source, &client);
     GetClientRect(source, &rc);
@@ -254,13 +261,14 @@ HWND InputTarget(HWND topLevel) {
     return topLevel;
 }
 
-bool DeliverInput(HWND topLevel, UINT message, WPARAM wp, LPARAM lp, bool critical) {
+bool DeliverInput(HWND topLevel, UINT message, WPARAM wp, LPARAM lp, bool /*critical*/) {
     HWND target = InputTarget(topLevel);
     if (!target) return false;
-    if (!critical) return PostMessageW(target, message, wp, lp) != FALSE;
-    DWORD_PTR result{};
-    return SendMessageTimeoutW(target, message, wp, lp,
-                               SMTO_ABORTIFHUNG | SMTO_BLOCK, 20, &result) != 0;
+    // Never wait inside a low-level hook. Waiting up to 20 ms for every target
+    // made latency accumulate (for example 10 windows could be 200 ms late)
+    // and Windows could temporarily disable the hook. PostMessage preserves
+    // down/up ordering in each target thread while queueing all targets at once.
+    return PostMessageW(target, message, wp, lp) != FALSE;
 }
 
 void ActivateSourceWindow() {
@@ -414,6 +422,7 @@ void SetMainWindow(HWND hwnd) {
     g_source = hwnd;
     RebuildList();
     SetStatus(L"Đã chọn cửa sổ chính: " + WindowTitle(hwnd));
+    ActivateSourceWindow();
 }
 
 void RenameWindowsSequentially() {
