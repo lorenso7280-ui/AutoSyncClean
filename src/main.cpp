@@ -515,8 +515,12 @@ void TileSelected() {
 }
 
 struct PlaybackJob {
+    struct Target {
+        HWND topLevel{};
+        HWND input{};
+    };
     std::vector<MacroEvent> events;
-    std::vector<HWND> targets;
+    std::vector<Target> targets;
     int repeat{1};
     int gapSeconds{1};
 };
@@ -540,10 +544,12 @@ DWORD WINAPI PlayThread(void* parameter) {
         for (const auto& e : job->events) {
             if (!g_playing) break;
             if (!PlaybackWait(e.delayMs)) break;
-            for (HWND h : job->targets) {
-                if (!IsWindow(h)) continue;
-                HWND target = InputTarget(h);
-                if (!target) continue;
+            for (const auto& destination : job->targets) {
+                // The input control is captured once when playback starts.
+                // Never follow the foreground window and never use SendInput,
+                // SetCursorPos or focus activation while background auto-click runs.
+                if (!IsWindow(destination.topLevel) || !IsWindow(destination.input)) continue;
+                HWND target = destination.input;
                 switch (e.type) {
                     case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
                     case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
@@ -991,9 +997,12 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 job->events = g_macro;
                 job->repeat = g_playRepeat;
                 job->gapSeconds = g_playGapSeconds;
-                for (const auto& window : g_windows)
-                    if (window.selected && IsWindow(window.hwnd)) job->targets.push_back(window.hwnd);
-                if (job->targets.empty() && g_source && IsWindow(g_source)) job->targets.push_back(g_source);
+                for (const auto& window : g_windows) {
+                    if (!window.selected || !IsWindow(window.hwnd)) continue;
+                    if (HWND input = InputTarget(window.hwnd)) job->targets.push_back({window.hwnd, input});
+                }
+                if (job->targets.empty() && g_source && IsWindow(g_source))
+                    if (HWND input = InputTarget(g_source)) job->targets.push_back({g_source, input});
                 if (job->targets.empty()) {
                     MessageBoxW(hwnd, L"Không có cửa sổ ONLINE nào được chọn để phát bản ghi.", L"Quản lí bản ghi", MB_ICONINFORMATION);
                     return 0;
@@ -1819,9 +1828,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     SyncChecksFromList();
                     auto job = std::make_unique<PlaybackJob>();
                     job->events = g_macro; job->repeat = 1; job->gapSeconds = 0;
-                    for (const auto& window : g_windows)
-                        if (window.selected && IsWindow(window.hwnd)) job->targets.push_back(window.hwnd);
-                    if (job->targets.empty() && g_source && IsWindow(g_source)) job->targets.push_back(g_source);
+                    for (const auto& window : g_windows) {
+                        if (!window.selected || !IsWindow(window.hwnd)) continue;
+                        if (HWND input = InputTarget(window.hwnd)) job->targets.push_back({window.hwnd, input});
+                    }
+                    if (job->targets.empty() && g_source && IsWindow(g_source))
+                        if (HWND input = InputTarget(g_source)) job->targets.push_back({g_source, input});
                     if (!job->targets.empty()) {
                         g_playPaused = false; g_playing = true;
                         HANDLE thread = CreateThread(nullptr, 0, PlayThread, job.get(), 0, nullptr);
