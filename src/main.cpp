@@ -162,14 +162,16 @@ void RebuildList() {
         LVITEMW item{};
         item.mask = LVIF_TEXT | LVIF_PARAM;
         item.iItem = static_cast<int>(i);
-        auto number = std::to_wstring(i + 1);
+        auto number = w.hwnd == g_source ? L"★" : std::to_wstring(i + 1);
         item.pszText = number.data();
         item.lParam = reinterpret_cast<LPARAM>(w.hwnd);
         int row = ListView_InsertItem(g_list, &item);
         auto id = HexHandle(w.hwnd);
         ListView_SetItemText(g_list, row, 1, id.data());
-        ListView_SetItemText(g_list, row, 2, w.title.data());
-        std::wstring state = IsWindow(w.hwnd) ? (g_sync && w.selected ? L"ĐANG HOẠT ĐỘNG" : L"ONLINE") : L"OFFLINE";
+        std::wstring displayTitle = w.hwnd == g_source ? L"★ [CỬA SỔ CHÍNH] " + w.title : w.title;
+        ListView_SetItemText(g_list, row, 2, displayTitle.data());
+        std::wstring state = w.hwnd == g_source ? L"CỬA SỔ CHÍNH" :
+            (IsWindow(w.hwnd) ? (g_sync && w.selected ? L"ĐANG ĐỒNG BỘ" : L"ONLINE") : L"OFFLINE");
         ListView_SetItemText(g_list, row, 3, state.data());
         auto size = WindowSize(w.hwnd);
         ListView_SetItemText(g_list, row, 4, size.data());
@@ -400,6 +402,16 @@ void ToggleRecord() {
 }
 
 void ShowContextMenu(POINT p) {
+    POINT clientPoint = p;
+    ScreenToClient(g_list, &clientPoint);
+    LVHITTESTINFO hit{};
+    hit.pt = clientPoint;
+    int row = ListView_HitTest(g_list, &hit);
+    if (row < 0 || row >= static_cast<int>(g_windows.size())) return;
+    ListView_SetItemState(g_list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_SetItemState(g_list, row, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_EnsureVisible(g_list, row, FALSE);
+    SetFocus(g_list);
     HMENU menu = CreatePopupMenu();
     HMENU sync = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING, IDM_SET_MAIN, L"Làm cửa sổ chính");
