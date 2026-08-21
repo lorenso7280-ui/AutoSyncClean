@@ -94,6 +94,7 @@ std::vector<ThumbnailItem> g_thumbnails;
 std::unordered_set<HWND> g_ignored;
 std::vector<MacroEvent> g_macro;
 std::vector<NamedRecording> g_recordings;
+std::wstring g_trackedExePath;
 int g_activeRecording{-1};
 int g_syncFps{30};
 int g_playRepeat{1}, g_playGapSeconds{1};
@@ -106,6 +107,7 @@ constexpr wchar_t kSettingsKey[] = L"Software\\AutoSyncClean";
 void SyncChecksFromList();
 void RefreshWindows(bool clearIgnored);
 void RefreshThumbnailViewer(bool force);
+std::wstring ExecutablePath(HWND hwnd);
 
 std::wstring LoadSettingString(const wchar_t* name, const wchar_t* fallback = L"") {
     wchar_t value[32768]{};
@@ -155,7 +157,13 @@ bool IsCandidate(HWND hwnd) {
     const bool tracked = std::any_of(g_windows.begin(), g_windows.end(), [hwnd](const auto& window) {
         return window.hwnd == hwnd;
     });
-    return tracked || title.find(L"doomsday") != std::wstring::npos;
+    if (tracked || title.find(L"doomsday") != std::wstring::npos) return true;
+    if (!g_trackedExePath.empty()) {
+        std::wstring path = ExecutablePath(hwnd);
+        std::transform(path.begin(), path.end(), path.begin(), towlower);
+        if (path == g_trackedExePath) return true;
+    }
+    return false;
 }
 
 std::wstring HexHandle(HWND hwnd) {
@@ -215,9 +223,10 @@ BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
     if (!IsCandidate(hwnd) || g_ignored.contains(hwnd)) return TRUE;
     auto it = std::find_if(g_windows.begin(), g_windows.end(), [hwnd](const auto& w) { return w.hwnd == hwnd; });
     const std::wstring title = WindowTitle(hwnd);
+    const std::wstring groupKey = g_trackedExePath.empty() ? title : g_trackedExePath;
     if (it == g_windows.end()) {
         it = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& w) {
-            return !IsWindow(w.hwnd) && w.groupTitle == title;
+            return !IsWindow(w.hwnd) && w.groupTitle == groupKey;
         });
         if (it != g_windows.end()) {
             it->hwnd = hwnd;
@@ -225,15 +234,15 @@ BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
             else it->title = title;
         } else {
             const bool trackedGroup = std::any_of(g_windows.begin(), g_windows.end(), [&](const auto& w) {
-                return w.groupTitle == title;
+                return w.groupTitle == groupKey;
             });
-            if (trackedGroup) g_windows.push_back({hwnd, title, false, title});
+            if (trackedGroup || !g_trackedExePath.empty()) g_windows.push_back({hwnd, title, false, groupKey});
         }
     } else if (it->title.rfind(L"Cửa sổ ", 0) == 0) {
         if (title != it->title) SetWindowTextW(hwnd, it->title.c_str());
     } else {
         it->title = title;
-        it->groupTitle = title;
+        it->groupTitle = groupKey;
     }
     return TRUE;
 }
@@ -1408,7 +1417,7 @@ LRESULT CALLBACK WindowPickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                 POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
                 ClientToScreen(hwnd, &point);
                 HWND target = GetAncestor(WindowFromPoint(point), GA_ROOT);
-                if (target && IsCandidate(target))
+                if (target && target != g_main && IsWindow(target) && IsWindowVisible(target))
                     SendMessageW(g_main, WM_APP + 2, reinterpret_cast<WPARAM>(target), 0);
                 else {
                     RefreshWindows(true);
@@ -1427,22 +1436,35 @@ LRESULT CALLBACK WindowPickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
 }
 
 void AcceptPickedWindow(HWND target) {
-    if (!IsCandidate(target)) return;
+    if (!target || target == g_main || !IsWindow(target) || !IsWindowVisible(target)) return;
+    std::wstring exePath = ExecutablePath(target);
+    if (exePath.empty()) {
+        SetStatus(L"Không thể đọc tiến trình của cửa sổ đã thả. Hãy chạy AutoSync Clean bằng Administrator.");
+        return;
+    }
+    std::transform(exePath.begin(), exePath.end(), exePath.begin(), towlower);
+    if (g_trackedExePath != exePath) {
+        g_windows.clear();
+        g_ignored.clear();
+        g_source = nullptr;
+    }
+    g_trackedExePath = exePath;
     const std::wstring title = WindowTitle(target);
     auto item = std::find_if(g_windows.begin(), g_windows.end(), [target](const auto& window) {
         return window.hwnd == target;
     });
     if (item == g_windows.end()) {
         item = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& window) {
-            return !IsWindow(window.hwnd) && window.groupTitle == title;
+            return !IsWindow(window.hwnd) && window.groupTitle == g_trackedExePath;
         });
-        if (item == g_windows.end()) g_windows.push_back({target, title, false, title});
+        if (item == g_windows.end()) g_windows.push_back({target, title, false, g_trackedExePath});
         else item->hwnd = target;
     }
     g_ignored.erase(target);
+    EnumWindows(EnumProc, 0);
     RebuildList();
     RefreshThumbnailViewer(true);
-    SetStatus(L"Đã nhận cửa sổ game: " + title);
+    SetStatus(L"Đã nhận " + std::to_wstring(g_windows.size()) + L" cửa sổ game cùng tiến trình.");
 }
 
 void Layout(HWND hwnd) {
