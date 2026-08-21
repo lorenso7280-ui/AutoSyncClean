@@ -4,7 +4,8 @@
 
 ## Chức năng
 
-- Khi khởi động, danh sách luôn trống; chỉ hiển thị cửa sổ Doomsday do người dùng kéo thả nút tròn để nhận thủ công.
+- Khi khởi động, danh sách luôn trống. Kéo nút tròn vào một cửa sổ game sẽ nhận diện đường dẫn file tiến trình và tự quét toàn bộ cửa sổ/tab đang chạy từ cùng file game.
+- Việc quét theo tiến trình vẫn hoạt động sau khi tắt hẳn rồi mở lại AutoSync Clean, kể cả khi các thanh tiêu đề game trước đó đã được đổi thành `Cửa sổ 1`, `Cửa sổ 2`…
 - Giữ các cửa sổ đã nhận trong danh sách và tự đổi trạng thái `ONLINE`/`OFFLINE` khi game mở hoặc đóng.
 - Kéo biểu tượng tròn bên trái rồi thả vào cửa sổ Doomsday để nhận cửa sổ thủ công.
 - Sau khi nhận cửa sổ đầu tiên, các cửa sổ mới có cùng tiêu đề game sẽ tự động được thêm vào cùng nhóm.
@@ -74,7 +75,7 @@ Các thông số trong cửa sổ **Mở cửa sổ** được lưu ngay khi b�
 
 1. Giữ chuột trái trên nút tròn `◎` ở góc trên bên trái.
 2. Kéo con trỏ dấu cộng vào cửa sổ game Doomsday rồi thả chuột.
-3. Cửa sổ được nhận sẽ xuất hiện trong danh sách với trạng thái `ONLINE`.
+3. Cửa sổ được thả và tất cả cửa sổ khác chạy cùng file `.exe` sẽ xuất hiện trong danh sách với trạng thái `ONLINE`.
 4. Sau khi đã nhận cửa sổ đầu tiên, nếu mở thêm 4 cửa sổ cùng tên game thì danh sách tự tăng lên thành tổng cộng 5 cửa sổ.
 5. Khi game đóng, dòng đó vẫn được giữ lại và chuyển thành `OFFLINE`. Khi cửa sổ cùng tên mở lại, phần mềm tự ghép và chuyển về `ONLINE`.
 6. Dùng menu chuột phải **Xóa khỏi danh sách** nếu muốn xóa hẳn một dòng, kể cả dòng đang `OFFLINE`.
