@@ -20,6 +20,9 @@
 - Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
 - Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
+- Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
+- Nút `Ⓡ` mở menu bắt đầu/dừng, phát hoặc xóa bản ghi; nhấp phải vào vùng trống của danh sách cũng mở menu này.
+- Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
 - **Hiện tất cả** và **Đóng tất cả** áp dụng cho mọi dòng đã tích, bao gồm cả cửa sổ chính; lệnh đóng tự tắt đồng bộ trước.
 
@@ -67,6 +70,8 @@ Các thông số trong cửa sổ **Mở cửa sổ** được lưu ngay khi b�
 6. Dùng menu chuột phải **Xóa khỏi danh sách** nếu muốn xóa hẳn một dòng, kể cả dòng đang `OFFLINE`.
 
 Để ghi chuỗi thao tác, bấm **Ghi thao tác**, thao tác trong cửa sổ chính, bấm **Dừng ghi**, sau đó dùng **Phát lại**.
+
+Nút Proxy `◉` giải thích và dẫn người dùng tới phương thức cấu hình an toàn. Ứng dụng không giả lập việc áp proxy riêng cho từng game: chức năng đó chỉ hoạt động khi game/launcher hỗ trợ tham số proxy hoặc khi proxy đã được cấu hình trong Windows.
 
 ### Xếp chồng và di chuyển cửa sổ
 
