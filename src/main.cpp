@@ -4,6 +4,7 @@
 #include <dwmapi.h>
 #include <windowsx.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -87,7 +88,7 @@ HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
 HWND g_launcher{};
 HWND g_arranger{};
 HWND g_thumbnailViewer{};
-HWND g_settingsWindow{}, g_recordManager{}, g_recordList{}, g_recordEvents{};
+HWND g_settingsWindow{}, g_recordManager{}, g_recordList{}, g_recordEvents{}, g_recordStartButton{};
 HWND g_recordEditor{}, g_editorEvents{}, g_editorName{}, g_editorSource{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
@@ -101,7 +102,8 @@ int g_activeRecording{-1};
 int g_syncFps{30};
 int g_playRepeat{1}, g_playGapSeconds{1};
 HWND g_source{};
-bool g_sync{}, g_recording{}, g_playing{}, g_blockMove{};
+bool g_sync{}, g_recording{}, g_blockMove{};
+std::atomic_bool g_playing{false}, g_playPaused{false};
 ULONGLONG g_lastMouseMoveBroadcast{};
 std::chrono::steady_clock::time_point g_lastMacro;
 constexpr wchar_t kSettingsKey[] = L"Software\\AutoSyncClean";
@@ -381,14 +383,14 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
             if (target) DeliverInput(h, msg, wp, ScaledPoint(target, nx, ny), critical);
         });
     }
-    // A recording is an action script, not a raw mouse trace. Do not store
-    // cursor movement or the separate down/up halves of a click: one physical
-    // click must become exactly one stable playback action.
+    // Do not store cursor movement. Keep button-down and button-up as separate
+    // timed events, matching the reference recorder and giving games enough
+    // time to recognize a real click instead of an instantaneous pulse.
     if (g_recording) {
-        if (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP || msg == WM_MBUTTONUP) {
-            UINT downMessage = msg == WM_LBUTTONUP ? WM_LBUTTONDOWN
-                             : msg == WM_RBUTTONUP ? WM_RBUTTONDOWN : WM_MBUTTONDOWN;
-            AddMacro({MacroType::MouseClick, downMessage, nx, ny, 0, 0, p.x, p.y});
+        if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN) {
+            AddMacro({MacroType::MouseDown, msg, nx, ny, 0, 0, p.x, p.y});
+        } else if (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP || msg == WM_MBUTTONUP) {
+            AddMacro({MacroType::MouseUp, msg, nx, ny, 0, 0, p.x, p.y});
         } else if (msg == WM_MOUSEWHEEL) {
             AddMacro({MacroType::Wheel, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0, p.x, p.y});
         }
@@ -504,37 +506,63 @@ void TileSelected() {
     }
 }
 
-DWORD WINAPI PlayThread(void*) {
-    g_playing = true;
-    const int repeat = std::clamp(g_playRepeat, 1, 999999);
+struct PlaybackJob {
+    std::vector<MacroEvent> events;
+    std::vector<HWND> targets;
+    int repeat{1};
+    int gapSeconds{1};
+};
+
+bool PlaybackWait(DWORD milliseconds) {
+    DWORD elapsed = 0;
+    while (g_playing && elapsed < milliseconds) {
+        while (g_playing && g_playPaused) Sleep(20);
+        if (!g_playing) return false;
+        const DWORD slice = std::min<DWORD>(10, milliseconds - elapsed);
+        Sleep(slice);
+        elapsed += slice;
+    }
+    return g_playing;
+}
+
+DWORD WINAPI PlayThread(void* parameter) {
+    std::unique_ptr<PlaybackJob> job(static_cast<PlaybackJob*>(parameter));
+    const int repeat = std::clamp(job->repeat, 1, 999999);
     for (int pass = 0; pass < repeat && g_playing; ++pass) {
-        for (const auto& e : g_macro) {
+        for (const auto& e : job->events) {
             if (!g_playing) break;
-            Sleep(e.delayMs);
-            ForTargets([&](HWND h) {
+            if (!PlaybackWait(e.delayMs)) break;
+            for (HWND h : job->targets) {
+                if (!IsWindow(h)) continue;
+                HWND target = InputTarget(h);
+                if (!target) continue;
                 switch (e.type) {
-                    case MacroType::KeyDown: PostMessageW(h, WM_KEYDOWN, e.data, 1); break;
-                    case MacroType::KeyUp: PostMessageW(h, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
-                    case MacroType::MouseMove: PostMessageW(h, WM_MOUSEMOVE, 0, ScaledPoint(h, e.nx, e.ny)); break;
-                    case MacroType::MouseDown: PostMessageW(h, e.data, e.data == WM_LBUTTONDOWN ? MK_LBUTTON : MK_RBUTTON, ScaledPoint(h, e.nx, e.ny)); break;
-                    case MacroType::MouseUp: PostMessageW(h, e.data, 0, ScaledPoint(h, e.nx, e.ny)); break;
+                    case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
+                    case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
+                    case MacroType::MouseMove: PostMessageW(target, WM_MOUSEMOVE, 0, ScaledPoint(target, e.nx, e.ny)); break;
+                    case MacroType::MouseDown: PostMessageW(target, e.data, e.data == WM_LBUTTONDOWN ? MK_LBUTTON : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON, ScaledPoint(target, e.nx, e.ny)); break;
+                    case MacroType::MouseUp: PostMessageW(target, e.data, 0, ScaledPoint(target, e.nx, e.ny)); break;
                     case MacroType::MouseClick: {
                         const UINT upMessage = e.data == WM_LBUTTONDOWN ? WM_LBUTTONUP
                                              : e.data == WM_RBUTTONDOWN ? WM_RBUTTONUP : WM_MBUTTONUP;
                         const WPARAM button = e.data == WM_LBUTTONDOWN ? MK_LBUTTON
                                              : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON;
-                        const LPARAM point = ScaledPoint(h, e.nx, e.ny);
-                        PostMessageW(h, e.data, button, point);
-                        PostMessageW(h, upMessage, 0, point);
+                        const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        PostMessageW(target, e.data, button, point);
+                        Sleep(40);
+                        PostMessageW(target, upMessage, 0, point);
                         break;
                     }
-                    case MacroType::Wheel: PostMessageW(h, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(h, e.nx, e.ny)); break;
+                    case MacroType::Wheel: PostMessageW(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(target, e.nx, e.ny)); break;
                 }
-            });
+            }
         }
-        if (g_playing && pass + 1 < repeat) Sleep(static_cast<DWORD>(std::clamp(g_playGapSeconds, 0, 3600) * 1000));
+        if (g_playing && pass + 1 < repeat &&
+            !PlaybackWait(static_cast<DWORD>(std::clamp(job->gapSeconds, 0, 3600) * 1000))) break;
     }
     g_playing = false;
+    g_playPaused = false;
+    if (g_recordManager) PostMessageW(g_recordManager, WM_APP + 20, 0, 0);
     SetStatus(L"Đã phát xong chuỗi thao tác.");
     return 0;
 }
@@ -672,6 +700,17 @@ const wchar_t* MacroTypeName(MacroType type) {
     return L"";
 }
 
+std::wstring MacroEventName(const MacroEvent& event) {
+    if (event.type == MacroType::MouseDown || event.type == MacroType::MouseUp) {
+        const bool down = event.type == MacroType::MouseDown;
+        const UINT message = static_cast<UINT>(event.data);
+        if (message == WM_LBUTTONDOWN || message == WM_LBUTTONUP) return down ? L"LEFT MOUSE DOWN" : L"LEFT MOUSE UP";
+        if (message == WM_RBUTTONDOWN || message == WM_RBUTTONUP) return down ? L"RIGHT MOUSE DOWN" : L"RIGHT MOUSE UP";
+        if (message == WM_MBUTTONDOWN || message == WM_MBUTTONUP) return down ? L"MIDDLE MOUSE DOWN" : L"MIDDLE MOUSE UP";
+    }
+    return MacroTypeName(event.type);
+}
+
 std::wstring MacroValue(const MacroEvent& event) {
     switch (event.type) {
         case MacroType::MouseMove:
@@ -705,7 +744,7 @@ void RefreshRecordManager() {
         LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
         auto number = std::to_wstring(i + 1); item.pszText = number.data();
         int row = ListView_InsertItem(g_recordEvents, &item);
-        auto type = std::wstring(MacroTypeName(events[i].type));
+        auto type = MacroEventName(events[i]);
         ListView_SetItemText(g_recordEvents, row, 1, type.data());
         auto value = MacroValue(events[i]);
         ListView_SetItemText(g_recordEvents, row, 2, value.data());
@@ -728,7 +767,7 @@ void RefreshEditorEvents() {
         LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
         auto number = std::to_wstring(i + 1); item.pszText = number.data();
         int row = ListView_InsertItem(g_editorEvents, &item);
-        auto type = std::wstring(MacroTypeName(g_macro[i].type));
+        auto type = MacroEventName(g_macro[i]);
         ListView_SetItemText(g_editorEvents, row, 1, type.data());
         auto value = MacroValue(g_macro[i]);
         ListView_SetItemText(g_editorEvents, row, 2, value.data());
@@ -851,6 +890,7 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
             };
             button(IDC_RECORD_START, L"Bắt đầu", 8, 74); button(IDC_RECORD_STOP, L"Kết thúc", 87, 74);
+            g_recordStartButton = GetDlgItem(hwnd, IDC_RECORD_START);
             CreateWindowW(L"STATIC", L"Lặp lại:", WS_CHILD | WS_VISIBLE, 8, 65, 55, 22, hwnd, nullptr, g_instance, nullptr);
             CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1", WS_CHILD | WS_VISIBLE | ES_NUMBER,
                 64, 62, 60, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_REPEAT), g_instance, nullptr);
@@ -903,16 +943,43 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 int value = _wtoi(text); return value > 0 ? value : fallback;
             };
             if (id == IDC_RECORD_START) {
+                if (g_playing) {
+                    g_playPaused = !g_playPaused.load();
+                    SetWindowTextW(g_recordStartButton, g_playPaused ? L"Tiếp tục" : L"Tạm dừng");
+                    return 0;
+                }
                 if (g_activeRecording < 0 || g_macro.empty()) {
                     MessageBoxW(hwnd, L"Hãy chọn một bản ghi có sự kiện trước khi bắt đầu.", L"Quản lí bản ghi", MB_ICONINFORMATION);
                     return 0;
                 }
                 g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT, 1), 1, 999999);
                 g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP, 1), 0, 3600);
-                if (!g_macro.empty() && !g_playing)
-                    CloseHandle(CreateThread(nullptr, 0, PlayThread, nullptr, 0, nullptr));
+                SyncChecksFromList();
+                auto job = std::make_unique<PlaybackJob>();
+                job->events = g_macro;
+                job->repeat = g_playRepeat;
+                job->gapSeconds = g_playGapSeconds;
+                for (const auto& window : g_windows)
+                    if (window.selected && IsWindow(window.hwnd)) job->targets.push_back(window.hwnd);
+                if (job->targets.empty() && g_source && IsWindow(g_source)) job->targets.push_back(g_source);
+                if (job->targets.empty()) {
+                    MessageBoxW(hwnd, L"Không có cửa sổ ONLINE nào được chọn để phát bản ghi.", L"Quản lí bản ghi", MB_ICONINFORMATION);
+                    return 0;
+                }
+                g_playPaused = false;
+                g_playing = true;
+                SetWindowTextW(g_recordStartButton, L"Tạm dừng");
+                HANDLE thread = CreateThread(nullptr, 0, PlayThread, job.get(), 0, nullptr);
+                if (thread) { job.release(); CloseHandle(thread); }
+                else {
+                    g_playing = false;
+                    SetWindowTextW(g_recordStartButton, L"Bắt đầu");
+                    MessageBoxW(hwnd, L"Không thể bắt đầu luồng phát bản ghi.", L"Quản lí bản ghi", MB_ICONERROR);
+                }
             } else if (id == IDC_RECORD_STOP) {
                 g_playing = false;
+                g_playPaused = false;
+                SetWindowTextW(g_recordStartButton, L"Bắt đầu");
                 if (g_recording) ToggleRecord();
                 RefreshRecordManager();
             } else if (id == IDM_RECORD_ADD) ShowRecordEditor();
@@ -926,7 +993,13 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         }
-        case WM_DESTROY: g_recordManager = g_recordList = g_recordEvents = nullptr; return 0;
+        case WM_APP + 20:
+            if (g_recordStartButton) SetWindowTextW(g_recordStartButton, L"Bắt đầu");
+            return 0;
+        case WM_DESTROY:
+            g_playing = false; g_playPaused = false;
+            g_recordManager = g_recordList = g_recordEvents = g_recordStartButton = nullptr;
+            return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -1704,7 +1777,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (id >= IDM_SET_MAIN && id <= IDM_REMOVE_ALL) { HandleMenu(id); return 0; }
             if (id == IDM_RECORD_TOGGLE) { ToggleRecord(); return 0; }
             if (id == IDM_RECORD_PLAY) {
-                if (!g_macro.empty() && !g_playing) CloseHandle(CreateThread(nullptr, 0, PlayThread, nullptr, 0, nullptr));
+                if (!g_macro.empty() && !g_playing) {
+                    SyncChecksFromList();
+                    auto job = std::make_unique<PlaybackJob>();
+                    job->events = g_macro; job->repeat = 1; job->gapSeconds = 0;
+                    for (const auto& window : g_windows)
+                        if (window.selected && IsWindow(window.hwnd)) job->targets.push_back(window.hwnd);
+                    if (job->targets.empty() && g_source && IsWindow(g_source)) job->targets.push_back(g_source);
+                    if (!job->targets.empty()) {
+                        g_playPaused = false; g_playing = true;
+                        HANDLE thread = CreateThread(nullptr, 0, PlayThread, job.get(), 0, nullptr);
+                        if (thread) { job.release(); CloseHandle(thread); }
+                        else g_playing = false;
+                    }
+                }
                 return 0;
             }
             if (id == IDM_RECORD_CLEAR) {
