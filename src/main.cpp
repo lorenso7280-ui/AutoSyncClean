@@ -205,6 +205,13 @@ void InsertColumn(int index, int width, const wchar_t* text) {
 }
 
 void RebuildList() {
+    if (!g_list) return;
+    const int selectedRow = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
+    const int topRow = ListView_GetTopIndex(g_list);
+    // The status timer rebuilds this list every three seconds. Suppress
+    // intermediate painting so users never see the empty phase between
+    // DeleteAllItems and the final inserted row.
+    SendMessageW(g_list, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(g_list);
     for (size_t i = 0; i < g_windows.size(); ++i) {
         auto& w = g_windows[i];
@@ -227,6 +234,15 @@ void RebuildList() {
         ListView_SetItemText(g_list, row, 4, size.data());
         ListView_SetCheckState(g_list, row, w.selected ? TRUE : FALSE);
     }
+    if (selectedRow >= 0 && selectedRow < static_cast<int>(g_windows.size())) {
+        ListView_SetItemState(g_list, selectedRow, LVIS_SELECTED | LVIS_FOCUSED,
+                             LVIS_SELECTED | LVIS_FOCUSED);
+    }
+    if (topRow >= 0 && topRow < static_cast<int>(g_windows.size()))
+        ListView_EnsureVisible(g_list, topRow, FALSE);
+    SendMessageW(g_list, WM_SETREDRAW, TRUE, 0);
+    RedrawWindow(g_list, nullptr, nullptr,
+                 RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
     std::wstring s = L"Cửa sổ: " + std::to_wstring(g_windows.size());
     if (g_source) s += L" | Cửa sổ chính: " + WindowTitle(g_source);
     SetStatus(s);
