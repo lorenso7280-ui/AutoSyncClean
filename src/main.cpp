@@ -525,9 +525,18 @@ void HandleMenu(int id) {
             }
             RebuildList(); break;
         case IDM_SHOW_ALL:
-            ForTargets([](HWND h) { ShowWindow(h, SW_RESTORE); }); break;
-        case IDM_CLOSE_ALL:
-            ForTargets([](HWND h) { PostMessageW(h, WM_CLOSE, 0, 0); }); break;
+            SyncChecksFromList();
+            for (const auto& window : g_windows)
+                if (window.selected && IsWindow(window.hwnd)) ShowWindow(window.hwnd, SW_RESTORE);
+            break;
+        case IDM_CLOSE_ALL: {
+            SyncChecksFromList();
+            if (g_sync) SetSync(false);
+            for (const auto& window : g_windows)
+                if (window.selected && IsWindow(window.hwnd)) PostMessageW(window.hwnd, WM_CLOSE, 0, 0);
+            SetStatus(L"Đã gửi lệnh đóng tới tất cả cửa sổ được chọn, bao gồm cửa sổ chính.");
+            break;
+        }
         case IDM_REMOVE_ALL:
             for (auto& w : g_windows) if (w.hwnd) g_ignored.insert(w.hwnd);
             g_windows.clear(); RebuildList(); break;
