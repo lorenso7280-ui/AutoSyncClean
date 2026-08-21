@@ -28,7 +28,9 @@
 - Năm nút bên phải dùng biểu tượng GDI tự vẽ, không phụ thuộc font của máy, theo đúng thứ tự: `R` bản ghi, lưới sắp xếp, quả địa cầu Proxy, màn hình thu nhỏ và bánh răng Thiết lập.
 - Nút bản ghi `R` mở cửa sổ **Quản lí bản ghi** với Bắt đầu/Kết thúc, số lần lặp, giãn cách, danh sách bản ghi và chi tiết từng sự kiện.
 - Khi mới mở **Quản lí bản ghi**, danh sách luôn trống. Nhấp phải trong khung **Tên bản ghi** để **Thêm bản ghi**, **Xóa bản ghi** hoặc **Xóa tất cả**.
-- **Thêm bản ghi** mở cửa sổ **Ghi lại thao tác**: chọn cửa sổ nguồn, bấm Bắt đầu để thu tọa độ chuột và bàn phím, bấm Kết thúc, nhập tên rồi bấm Lưu. Chỉ bản ghi đã lưu mới xuất hiện trong danh sách với đuôi `.json`.
+- **Thêm bản ghi** mở cửa sổ **Ghi lại thao tác**. Hộp chọn nguồn luôn liệt kê rõ `Cửa sổ 1`, `Cửa sổ 2`… theo đúng thứ tự danh sách; chỉ cửa sổ đang `ONLINE` mới bắt đầu ghi được.
+- Sau khi bấm **Bắt đầu**, chương trình chỉ thu thao tác xảy ra bên trong cửa sổ nguồn đã chọn. Chuyển động con trỏ không được lưu; một lần nhấn-thả chuột được gộp thành đúng một sự kiện **Click chuột** với tọa độ tương đối trong vùng game. Vì vậy, ví dụ nhấn một lần vào ô **TRỢ GIÚP** màu vàng rồi bấm **Kết thúc** sẽ tạo đúng một điểm click để phát lại, không có chuỗi rê chuột thừa.
+- Bàn phím, cuộn chuột và các click tiếp theo vẫn được ghi theo đúng thứ tự/thời gian. Nhập tên rồi bấm **Lưu**; chỉ bản ghi đã lưu mới xuất hiện trong danh sách với đuôi `.json`.
 - Trong cửa sổ quản lí, Bắt đầu phát bản ghi đang chọn theo số lần lặp/giãn cách và Kết thúc dừng phát.
 - Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Phát lại dùng thông điệp nền, không di chuyển hoặc khóa con trỏ thật; người dùng vẫn có thể sử dụng chuột và bàn phím của máy tính bình thường.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
