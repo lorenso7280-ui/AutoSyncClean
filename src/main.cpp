@@ -164,18 +164,19 @@ void RebuildList() {
     ListView_DeleteAllItems(g_list);
     for (size_t i = 0; i < g_windows.size(); ++i) {
         auto& w = g_windows[i];
+        const bool isSource = g_source && w.hwnd == g_source;
         LVITEMW item{};
         item.mask = LVIF_TEXT | LVIF_PARAM;
         item.iItem = static_cast<int>(i);
-        auto number = w.hwnd == g_source ? L"★" : std::to_wstring(i + 1);
+        auto number = isSource ? L"★" : std::to_wstring(i + 1);
         item.pszText = number.data();
         item.lParam = reinterpret_cast<LPARAM>(w.hwnd);
         int row = ListView_InsertItem(g_list, &item);
         auto id = HexHandle(w.hwnd);
         ListView_SetItemText(g_list, row, 1, id.data());
-        std::wstring displayTitle = w.hwnd == g_source ? L"★ [CỬA SỔ CHÍNH] " + w.title : w.title;
+        std::wstring displayTitle = isSource ? L"★ [CỬA SỔ CHÍNH] " + w.title : w.title;
         ListView_SetItemText(g_list, row, 2, displayTitle.data());
-        std::wstring state = w.hwnd == g_source ? L"CỬA SỔ CHÍNH" :
+        std::wstring state = isSource ? L"CỬA SỔ CHÍNH" :
             (IsWindow(w.hwnd) ? (g_sync && w.selected ? L"ĐANG ĐỒNG BỘ" : L"ONLINE") : L"OFFLINE");
         ListView_SetItemText(g_list, row, 3, state.data());
         auto size = WindowSize(w.hwnd);
@@ -224,7 +225,6 @@ void RefreshWindows(bool clearIgnored = false) {
         }
     }
     EnumWindows(EnumProc, 0);
-    std::sort(g_windows.begin(), g_windows.end(), [](const auto& a, const auto& b) { return a.title < b.title; });
     RebuildList();
     RefreshThumbnailViewer(false);
 }
@@ -416,6 +416,15 @@ void SetMainWindow(HWND hwnd) {
     SetStatus(L"Đã chọn cửa sổ chính: " + WindowTitle(hwnd));
 }
 
+void RenameWindowsSequentially() {
+    for (size_t i = 0; i < g_windows.size(); ++i) {
+        auto& window = g_windows[i];
+        window.title = L"Cửa sổ " + std::to_wstring(i + 1);
+        if (IsWindow(window.hwnd)) SetWindowTextW(window.hwnd, window.title.c_str());
+    }
+    RebuildList();
+}
+
 void TileSelected() {
     SyncChecksFromList();
     std::vector<HWND> items;
@@ -516,14 +525,9 @@ void HandleMenu(int id) {
         case IDM_SELECT_ALL: case IDM_CLEAR_ALL:
             for (int i = 0; i < ListView_GetItemCount(g_list); ++i) ListView_SetCheckState(g_list, i, id == IDM_SELECT_ALL);
             SyncChecksFromList();
-            if (id == IDM_SELECT_ALL) {
-                for (size_t i = 0; i < g_windows.size(); ++i) {
-                    auto& window = g_windows[i];
-                    window.title = L"Cửa sổ " + std::to_wstring(i + 1);
-                    if (IsWindow(window.hwnd)) SetWindowTextW(window.hwnd, window.title.c_str());
-                }
-            }
-            RebuildList(); break;
+            if (id == IDM_SELECT_ALL) RenameWindowsSequentially();
+            else RebuildList();
+            break;
         case IDM_SHOW_ALL:
             SyncChecksFromList();
             for (const auto& window : g_windows)
@@ -906,6 +910,7 @@ void ToggleThumbnailViewer() {
         DestroyWindow(g_thumbnailViewer);
         return;
     }
+    RenameWindowsSequentially();
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{sizeof(wc)};
