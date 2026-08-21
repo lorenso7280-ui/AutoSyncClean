@@ -734,11 +734,12 @@ struct ArrangeRequest {
 };
 
 void ArrangeOverlapped(const ArrangeRequest& request) {
-    SyncChecksFromList();
     std::vector<HWND> targets;
-    for (auto& item : g_windows) if (item.selected && IsWindow(item.hwnd)) targets.push_back(item.hwnd);
+    // Arrangement is a window-management action, not a sync-target action.
+    // Apply it to every online game even when its sync checkbox is cleared.
+    for (auto& item : g_windows) if (IsWindow(item.hwnd)) targets.push_back(item.hwnd);
     if (targets.empty()) {
-        MessageBoxW(g_main, L"Chưa chọn cửa sổ game nào.", kTitle, MB_ICONINFORMATION); return;
+        MessageBoxW(g_main, L"Không có cửa sổ game ONLINE.", kTitle, MB_ICONINFORMATION); return;
     }
     struct DesiredWindow { HWND hwnd; int x, y, width, height; };
     std::vector<DesiredWindow> desiredWindows;
@@ -866,23 +867,30 @@ void LayoutThumbnails(HWND hwnd) {
     const int count = static_cast<int>(g_thumbnails.size());
     if (!count || client.right <= 0 || client.bottom <= 0) return;
     constexpr int gap = 4;
-    const int available = std::max(1, static_cast<int>(client.right) - gap * (count + 1));
-    const int cellWidth = std::max(90, std::min(230, available / count));
-    int left = gap;
-    for (auto& item : g_thumbnails) {
+    constexpr int maxColumns = 10;
+    const int columns = std::min(maxColumns, count);
+    const int rows = (count + maxColumns - 1) / maxColumns;
+    const int cellWidth = std::max(1, (static_cast<int>(client.right) - gap * (columns + 1)) / columns);
+    const int cellHeight = std::max(1, (static_cast<int>(client.bottom) - gap * (rows + 1)) / rows);
+    for (int index = 0; index < count; ++index) {
+        auto& item = g_thumbnails[static_cast<size_t>(index)];
+        const int column = index % maxColumns;
+        const int row = index / maxColumns;
+        const int cellLeft = gap + column * (cellWidth + gap);
+        const int cellTop = gap + row * (cellHeight + gap);
         SIZE sourceSize{};
         DwmQueryThumbnailSourceSize(item.handle, &sourceSize);
         const int maxWidth = std::max(1, cellWidth);
-        const int maxHeight = std::max(1, static_cast<int>(client.bottom) - gap * 2);
+        const int maxHeight = std::max(1, cellHeight);
         double scale = 1.0;
         if (sourceSize.cx > 0 && sourceSize.cy > 0)
             scale = std::min(static_cast<double>(maxWidth) / sourceSize.cx,
                              static_cast<double>(maxHeight) / sourceSize.cy);
         const int width = std::max(1, static_cast<int>(sourceSize.cx * scale));
         const int height = std::max(1, static_cast<int>(sourceSize.cy * scale));
-        const int top = gap + (maxHeight - height) / 2;
-        item.destination = {left + (cellWidth - width) / 2, top,
-                            left + (cellWidth - width) / 2 + width, top + height};
+        const int left = cellLeft + (cellWidth - width) / 2;
+        const int top = cellTop + (cellHeight - height) / 2;
+        item.destination = {left, top, left + width, top + height};
         DWM_THUMBNAIL_PROPERTIES properties{};
         properties.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
                              DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
@@ -891,7 +899,6 @@ void LayoutThumbnails(HWND hwnd) {
         properties.opacity = 255;
         properties.fSourceClientAreaOnly = FALSE;
         DwmUpdateThumbnailProperties(item.handle, &properties);
-        left += cellWidth + gap;
     }
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -971,7 +978,10 @@ void ToggleThumbnailViewer() {
         registered = true;
     }
     RECT work{}; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
-    constexpr int height = 180;
+    int onlineCount = 0;
+    for (const auto& window : g_windows) if (IsWindow(window.hwnd)) ++onlineCount;
+    const int rows = std::max(1, (onlineCount + 9) / 10);
+    const int height = std::min(work.bottom - work.top, 35 + rows * 125);
     HWND viewer = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.ThumbnailViewer", L"Xem cửa sổ thu nhỏ",
                                   WS_OVERLAPPEDWINDOW, work.left, std::max(work.top, work.bottom - height),
                                   work.right - work.left, height, nullptr, nullptr, g_instance, nullptr);
@@ -1142,7 +1152,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return reinterpret_cast<LRESULT>(GetStockObject(WHITE_BRUSH));
         case WM_GETMINMAXINFO: {
             auto* info = reinterpret_cast<MINMAXINFO*>(lp);
-            info->ptMinTrackSize = {560, 380};
+            info->ptMinTrackSize = {560, 255};
             return 0;
         }
         case WM_SIZE: Layout(hwnd); return 0;
@@ -1220,7 +1230,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc);
     HWND hwnd = CreateWindowExW(0, kClassName, kTitle, WS_OVERLAPPEDWINDOW,
-                                CW_USEDEFAULT, CW_USEDEFAULT, 610, 480,
+                                CW_USEDEFAULT, CW_USEDEFAULT, 610, 255,
                                 nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
     ShowWindow(hwnd, show);
