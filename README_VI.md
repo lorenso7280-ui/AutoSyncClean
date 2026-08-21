@@ -19,6 +19,9 @@
 - Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
 - Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
 - Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
+- Cửa sổ chính khởi động ở chiều cao gọn, vừa khoảng 6 dòng ID game; người dùng vẫn có thể kéo cạnh để mở rộng.
+- Thanh xem trước hiển thị tối đa 10 cửa sổ trên mỗi hàng và tự thêm hàng khi có nhiều hơn 10 cửa sổ.
+- Sắp xếp/resize và thanh cửa sổ thu nhỏ luôn áp dụng cho toàn bộ cửa sổ game `ONLINE`, không cần tích checkbox; checkbox chỉ quyết định cửa sổ nhận thao tác đồng bộ.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
 - Nút `Ⓡ` mở menu bắt đầu/dừng, phát hoặc xóa bản ghi; nhấp phải vào vùng trống của danh sách cũng mở menu này.
@@ -75,7 +78,7 @@ Nút Proxy `◉` giải thích và dẫn người dùng tới phương thức c�
 
 ### Xếp chồng và di chuyển cửa sổ
 
-1. Đánh dấu các cửa sổ game cần sắp xếp và bấm nút biểu tượng lưới ở góc trên bên phải.
+1. Bấm nút biểu tượng lưới ở góc trên bên phải. Tất cả cửa sổ game `ONLINE` sẽ được áp dụng, không cần đánh dấu checkbox.
 2. Nhập kích thước vùng game, vị trí cách mép trái `X` và cách mép trên `Y`.
 3. Đặt độ lệch mỗi cửa sổ `X = 0`, `Y = 0` để các cửa sổ chồng khít và nhìn như một cửa sổ duy nhất.
 4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
