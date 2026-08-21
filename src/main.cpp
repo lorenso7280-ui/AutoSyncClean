@@ -564,9 +564,11 @@ bool ActivatePlaybackTarget(HWND topLevel, HWND input) {
 POINT PlaybackScreenPoint(HWND target, const MacroEvent& event) {
     RECT client{};
     GetClientRect(target, &client);
+    const int width = static_cast<int>(client.right - client.left);
+    const int height = static_cast<int>(client.bottom - client.top);
     POINT point{
-        std::clamp(static_cast<int>(event.nx * client.right), 0, std::max(0, client.right - 1)),
-        std::clamp(static_cast<int>(event.ny * client.bottom), 0, std::max(0, client.bottom - 1))
+        std::clamp(static_cast<int>(event.nx * width), 0, std::max(0, width - 1)),
+        std::clamp(static_cast<int>(event.ny * height), 0, std::max(0, height - 1))
     };
     ClientToScreen(target, &point);
     return point;
