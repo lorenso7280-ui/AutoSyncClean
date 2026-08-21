@@ -25,8 +25,10 @@
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
 - Năm nút bên phải dùng biểu tượng GDI tự vẽ, không phụ thuộc font của máy, theo đúng thứ tự: `R` bản ghi, lưới sắp xếp, quả địa cầu Proxy, màn hình thu nhỏ và bánh răng Thiết lập.
-- Nút `Ⓡ` mở menu bắt đầu/dừng, phát hoặc xóa bản ghi; nhấp phải vào vùng trống của danh sách cũng mở menu này.
+- Nút bản ghi `R` mở cửa sổ **Quản lí bản ghi** với Bắt đầu/Kết thúc, số lần lặp, giãn cách, danh sách bản ghi và chi tiết từng sự kiện.
+- Nhấp phải trong danh sách bản ghi để **Thêm bản ghi**, **Xóa bản ghi** hoặc **Xóa tất cả**. Thêm bản ghi sẽ bắt đầu thu thao tác; Kết thúc dừng thu/phát, còn Bắt đầu phát bản ghi đang chọn theo số lần lặp và giãn cách đã nhập.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
+- Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, luôn khởi tạo ở mức mặc định 30 FPS. Giá trị này điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
 - **Đóng tất cả** áp dụng cho mọi cửa sổ game `ONLINE`, bao gồm cửa sổ chính và không phụ thuộc checkbox. Phần mềm gửi lệnh đóng đồng thời, chờ 300 ms rồi buộc kết thúc đúng các tiến trình game vẫn không phản hồi; lệnh này tự tắt đồng bộ trước và có thể làm mất dữ liệu game chưa lưu.
 - **Hiện tất cả** tiếp tục áp dụng cho những dòng đã tích checkbox.
