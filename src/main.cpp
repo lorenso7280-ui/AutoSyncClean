@@ -76,10 +76,39 @@ std::vector<MacroEvent> g_macro;
 HWND g_source{};
 bool g_sync{}, g_recording{}, g_playing{}, g_blockMove{};
 std::chrono::steady_clock::time_point g_lastMacro;
+constexpr wchar_t kSettingsKey[] = L"Software\\AutoSyncClean";
 
 void SyncChecksFromList();
 void RefreshWindows(bool clearIgnored);
 void RefreshThumbnailViewer(bool force);
+
+std::wstring LoadSettingString(const wchar_t* name, const wchar_t* fallback = L"") {
+    wchar_t value[32768]{};
+    DWORD bytes = sizeof(value), type{};
+    if (RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, name, RRF_RT_REG_SZ,
+                     &type, value, &bytes) == ERROR_SUCCESS) return value;
+    return fallback;
+}
+
+DWORD LoadSettingDword(const wchar_t* name, DWORD fallback) {
+    DWORD value{}, bytes = sizeof(value), type{};
+    if (RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, name, RRF_RT_REG_DWORD,
+                     &type, &value, &bytes) == ERROR_SUCCESS) return value;
+    return fallback;
+}
+
+void SaveLaunchSettings(const std::wstring& path, const std::wstring& args, DWORD count, DWORD delay) {
+    HKEY key{};
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kSettingsKey, 0, nullptr, 0, KEY_SET_VALUE,
+                        nullptr, &key, nullptr) != ERROR_SUCCESS) return;
+    RegSetValueExW(key, L"GamePath", 0, REG_SZ, reinterpret_cast<const BYTE*>(path.c_str()),
+                   static_cast<DWORD>((path.size() + 1) * sizeof(wchar_t)));
+    RegSetValueExW(key, L"Arguments", 0, REG_SZ, reinterpret_cast<const BYTE*>(args.c_str()),
+                   static_cast<DWORD>((args.size() + 1) * sizeof(wchar_t)));
+    RegSetValueExW(key, L"WindowCount", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&count), sizeof(count));
+    RegSetValueExW(key, L"LaunchDelay", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&delay), sizeof(delay));
+    RegCloseKey(key);
+}
 
 std::wstring WindowTitle(HWND hwnd) {
     int n = GetWindowTextLengthW(hwnd);
@@ -140,7 +169,7 @@ void RebuildList() {
         auto id = HexHandle(w.hwnd);
         ListView_SetItemText(g_list, row, 1, id.data());
         ListView_SetItemText(g_list, row, 2, w.title.data());
-        std::wstring state = IsWindow(w.hwnd) ? (g_sync && w.selected ? L"Đang hoạt động" : L"Online") : L"Đã đóng";
+        std::wstring state = IsWindow(w.hwnd) ? (g_sync && w.selected ? L"ĐANG HOẠT ĐỘNG" : L"ONLINE") : L"OFFLINE";
         ListView_SetItemText(g_list, row, 3, state.data());
         auto size = WindowSize(w.hwnd);
         ListView_SetItemText(g_list, row, 4, size.data());
@@ -154,20 +183,28 @@ void RebuildList() {
 BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
     if (!IsCandidate(hwnd) || g_ignored.contains(hwnd)) return TRUE;
     auto it = std::find_if(g_windows.begin(), g_windows.end(), [hwnd](const auto& w) { return w.hwnd == hwnd; });
-    if (it == g_windows.end()) g_windows.push_back({hwnd, WindowTitle(hwnd), true});
-    else it->title = WindowTitle(hwnd);
+    const std::wstring title = WindowTitle(hwnd);
+    if (it == g_windows.end()) {
+        it = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& w) {
+            return !IsWindow(w.hwnd) && w.title == title;
+        });
+        if (it == g_windows.end()) g_windows.push_back({hwnd, title, true});
+        else { it->hwnd = hwnd; it->title = title; }
+    } else it->title = title;
     return TRUE;
 }
 
 void RefreshWindows(bool clearIgnored = false) {
     if (g_list) SyncChecksFromList();
     if (clearIgnored) g_ignored.clear();
-    g_windows.erase(std::remove_if(g_windows.begin(), g_windows.end(), [](const auto& w) {
-        return !IsWindow(w.hwnd) || !IsCandidate(w.hwnd);
-    }), g_windows.end());
+    for (auto& window : g_windows) {
+        if (!IsWindow(window.hwnd) || !IsCandidate(window.hwnd)) {
+            if (window.hwnd == g_source) g_source = nullptr;
+            window.hwnd = nullptr;
+        }
+    }
     EnumWindows(EnumProc, 0);
     std::sort(g_windows.begin(), g_windows.end(), [](const auto& a, const auto& b) { return a.title < b.title; });
-    if (g_source && !IsWindow(g_source)) g_source = nullptr;
     RebuildList();
     RefreshThumbnailViewer(false);
 }
@@ -289,6 +326,11 @@ HWND SelectedHwnd() {
     return g_windows[static_cast<size_t>(row)].hwnd;
 }
 
+int SelectedIndex() {
+    int row = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
+    return row >= 0 && row < static_cast<int>(g_windows.size()) ? row : -1;
+}
+
 void SetMainWindow(HWND hwnd) {
     if (!hwnd || !IsWindow(hwnd)) return;
     g_source = hwnd;
@@ -377,7 +419,11 @@ void HandleMenu(int id) {
         case IDM_REFRESH: RefreshWindows(true); break;
         case IDM_CLOSE_ONE: if (selected) PostMessageW(selected, WM_CLOSE, 0, 0); break;
         case IDM_REMOVE_ONE:
-            if (selected) { g_ignored.insert(selected); RefreshWindows(); }
+            if (int row = SelectedIndex(); row >= 0) {
+                if (selected) g_ignored.insert(selected);
+                g_windows.erase(g_windows.begin() + row);
+                RebuildList(); RefreshThumbnailViewer(true);
+            }
             break;
         case IDM_SELECT_ALL: case IDM_CLEAR_ALL:
             for (int i = 0; i < ListView_GetItemCount(g_list); ++i) ListView_SetCheckState(g_list, i, id == IDM_SELECT_ALL);
@@ -387,7 +433,7 @@ void HandleMenu(int id) {
         case IDM_CLOSE_ALL:
             ForTargets([](HWND h) { PostMessageW(h, WM_CLOSE, 0, 0); }); break;
         case IDM_REMOVE_ALL:
-            for (auto& w : g_windows) g_ignored.insert(w.hwnd);
+            for (auto& w : g_windows) if (w.hwnd) g_ignored.insert(w.hwnd);
             g_windows.clear(); RebuildList(); break;
     }
 }
@@ -460,13 +506,17 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             };
             label(L"Đường dẫn:", 14, 18, 72);
             std::wstring path = ExecutablePath(SelectedHwnd());
+            if (path.empty()) path = LoadSettingString(L"GamePath");
             edit(IDC_LAUNCH_PATH, path.c_str(), 86, 15, 445);
             HWND browse = CreateWindowW(L"BUTTON", L"...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 538, 15, 43, 23,
                                         hwnd, reinterpret_cast<HMENU>(IDC_LAUNCH_BROWSE), g_instance, nullptr);
             SendMessageW(browse, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
-            label(L"Tham số:", 14, 55, 72); edit(IDC_LAUNCH_ARGS, L"-la", 86, 52, 160);
-            label(L"Số cửa sổ:", 14, 91, 72); edit(IDC_LAUNCH_COUNT, L"1", 86, 88, 60);
-            label(L"Thời gian giãn cách:", 182, 91, 140); edit(IDC_LAUNCH_DELAY, L"2000", 322, 88, 80);
+            const std::wstring args = LoadSettingString(L"Arguments", L"-la");
+            const std::wstring count = std::to_wstring(LoadSettingDword(L"WindowCount", 1));
+            const std::wstring delay = std::to_wstring(LoadSettingDword(L"LaunchDelay", 2000));
+            label(L"Tham số:", 14, 55, 72); edit(IDC_LAUNCH_ARGS, args.c_str(), 86, 52, 160);
+            label(L"Số cửa sổ:", 14, 91, 72); edit(IDC_LAUNCH_COUNT, count.c_str(), 86, 88, 60);
+            label(L"Thời gian giãn cách:", 182, 91, 140); edit(IDC_LAUNCH_DELAY, delay.c_str(), 322, 88, 80);
             label(L"(Mili giây)", 410, 91, 90);
             HWND ok = CreateWindowW(L"BUTTON", L"Xác nhận", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
                                     260, 132, 88, 30, hwnd, reinterpret_cast<HMENU>(IDC_LAUNCH_OK), g_instance, nullptr);
@@ -494,6 +544,8 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 request->path = path; request->args = ControlText(hwnd, IDC_LAUNCH_ARGS);
                 request->count = std::clamp(_wtoi(ControlText(hwnd, IDC_LAUNCH_COUNT).c_str()), 1, 50);
                 request->delay = static_cast<DWORD>(std::clamp(_wtoi(ControlText(hwnd, IDC_LAUNCH_DELAY).c_str()), 0, 60000));
+                SaveLaunchSettings(request->path, request->args,
+                                   static_cast<DWORD>(request->count), request->delay);
                 HANDLE thread = CreateThread(nullptr, 0, LaunchThread, request.release(), 0, nullptr);
                 if (thread) CloseHandle(thread);
                 DestroyWindow(hwnd); return 0;
@@ -689,9 +741,11 @@ void LayoutThumbnails(HWND hwnd) {
 }
 
 bool ThumbnailSourcesChanged() {
-    if (g_thumbnails.size() != g_windows.size()) return true;
-    for (size_t i = 0; i < g_windows.size(); ++i)
-        if (g_thumbnails[i].source != g_windows[i].hwnd || !IsWindow(g_thumbnails[i].source)) return true;
+    std::vector<HWND> online;
+    for (const auto& window : g_windows) if (IsWindow(window.hwnd)) online.push_back(window.hwnd);
+    if (g_thumbnails.size() != online.size()) return true;
+    for (size_t i = 0; i < online.size(); ++i)
+        if (g_thumbnails[i].source != online[i] || !IsWindow(g_thumbnails[i].source)) return true;
     return false;
 }
 
@@ -699,6 +753,7 @@ void RefreshThumbnailViewer(bool force = false) {
     if (!g_thumbnailViewer || (!force && !ThumbnailSourcesChanged())) return;
     ClearThumbnails();
     for (const auto& window : g_windows) {
+        if (!IsWindow(window.hwnd)) continue;
         HTHUMBNAIL thumbnail{};
         if (SUCCEEDED(DwmRegisterThumbnail(g_thumbnailViewer, window.hwnd, &thumbnail)))
             g_thumbnails.push_back({window.hwnd, thumbnail, {}});
@@ -767,6 +822,60 @@ void ToggleThumbnailViewer() {
         ShowWindow(viewer, SW_SHOW);
         UpdateWindow(viewer);
     }
+}
+
+LRESULT CALLBACK WindowPickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                  UINT_PTR, DWORD_PTR) {
+    switch (msg) {
+        case WM_LBUTTONDOWN:
+            SetCapture(hwnd);
+            SetCursor(LoadCursorW(nullptr, IDC_CROSS));
+            SetStatus(L"Giữ chuột và kéo biểu tượng tròn vào cửa sổ game...");
+            return 0;
+        case WM_MOUSEMOVE:
+            if (GetCapture() == hwnd) SetCursor(LoadCursorW(nullptr, IDC_CROSS));
+            return 0;
+        case WM_LBUTTONUP:
+            if (GetCapture() == hwnd) {
+                ReleaseCapture();
+                POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                ClientToScreen(hwnd, &point);
+                HWND target = GetAncestor(WindowFromPoint(point), GA_ROOT);
+                if (target && IsCandidate(target))
+                    SendMessageW(g_main, WM_APP + 2, reinterpret_cast<WPARAM>(target), 0);
+                else {
+                    RefreshWindows(true);
+                    SetStatus(L"Không nhận được cửa sổ. Hãy kéo và thả đúng vào cửa sổ game Doomsday.");
+                }
+            }
+            return 0;
+        case WM_SETCURSOR:
+            if (GetCapture() == hwnd) {
+                SetCursor(LoadCursorW(nullptr, IDC_CROSS));
+                return TRUE;
+            }
+            break;
+    }
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
+
+void AcceptPickedWindow(HWND target) {
+    if (!IsCandidate(target)) return;
+    const std::wstring title = WindowTitle(target);
+    auto item = std::find_if(g_windows.begin(), g_windows.end(), [target](const auto& window) {
+        return window.hwnd == target;
+    });
+    if (item == g_windows.end()) {
+        item = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& window) {
+            return !IsWindow(window.hwnd) && window.title == title;
+        });
+        if (item == g_windows.end()) g_windows.push_back({target, title, true});
+        else { item->hwnd = target; item->selected = true; }
+    } else item->selected = true;
+    g_ignored.erase(target);
+    RebuildList();
+    RefreshThumbnailViewer(true);
+    SetStatus(L"Đã nhận cửa sổ game: " + title);
 }
 
 void Layout(HWND hwnd) {
@@ -838,7 +947,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
                 return control;
             };
-            button(IDC_REFRESH, L"◎");
+            HWND picker = button(IDC_REFRESH, L"◎");
+            SetWindowSubclass(picker, WindowPickerProc, 1, 0);
             button(IDC_SET_MAIN, L"▣");
             g_btnSync = button(IDC_SYNC, L"⟳  Bật đồng bộ");
             button(IDC_TILE, L"▦");
@@ -911,6 +1021,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 MessageBoxW(hwnd, L"Một số tiến trình không mở được. Game có thể đang chặn đa phiên hoặc cần chạy quyền Administrator.", kTitle, MB_ICONWARNING);
             return 0;
         }
+        case WM_APP + 2:
+            AcceptPickedWindow(reinterpret_cast<HWND>(wp));
+            return 0;
         case WM_DESTROY:
             SetSync(false); g_playing = false;
             if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
