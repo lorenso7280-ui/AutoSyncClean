@@ -981,7 +981,8 @@ void ToggleThumbnailViewer() {
     int onlineCount = 0;
     for (const auto& window : g_windows) if (IsWindow(window.hwnd)) ++onlineCount;
     const int rows = std::max(1, (onlineCount + 9) / 10);
-    const int height = std::min(work.bottom - work.top, 35 + rows * 125);
+    const int workHeight = static_cast<int>(work.bottom - work.top);
+    const int height = std::min(workHeight, 35 + rows * 125);
     HWND viewer = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.ThumbnailViewer", L"Xem cửa sổ thu nhỏ",
                                   WS_OVERLAPPEDWINDOW, work.left, std::max(work.top, work.bottom - height),
                                   work.right - work.left, height, nullptr, nullptr, g_instance, nullptr);
