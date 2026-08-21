@@ -188,7 +188,14 @@ BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
         it = std::find_if(g_windows.begin(), g_windows.end(), [&](const auto& w) {
             return !IsWindow(w.hwnd) && w.title == title;
         });
-        if (it != g_windows.end()) { it->hwnd = hwnd; it->title = title; }
+        if (it != g_windows.end()) {
+            it->hwnd = hwnd; it->title = title;
+        } else {
+            const bool trackedGroup = std::any_of(g_windows.begin(), g_windows.end(), [&](const auto& w) {
+                return w.title == title;
+            });
+            if (trackedGroup) g_windows.push_back({hwnd, title, true});
+        }
     } else it->title = title;
     return TRUE;
 }
