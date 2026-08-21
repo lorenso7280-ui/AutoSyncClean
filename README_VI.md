@@ -24,6 +24,7 @@
 - Sắp xếp/resize và thanh cửa sổ thu nhỏ luôn áp dụng cho toàn bộ cửa sổ game `ONLINE`, không cần tích checkbox; checkbox chỉ quyết định cửa sổ nhận thao tác đồng bộ.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
+- Năm nút bên phải dùng biểu tượng GDI tự vẽ, không phụ thuộc font của máy, theo đúng thứ tự: `R` bản ghi, lưới sắp xếp, quả địa cầu Proxy, màn hình thu nhỏ và bánh răng Thiết lập.
 - Nút `Ⓡ` mở menu bắt đầu/dừng, phát hoặc xóa bản ghi; nhấp phải vào vùng trống của danh sách cũng mở menu này.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
@@ -91,6 +92,7 @@ Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuy�
 
 1. Bấm nút biểu tượng thanh thu nhỏ `▤` ở góc trên bên phải.
 2. Thanh **Xem cửa sổ thu nhỏ** sẽ mở sát đáy màn hình và tự hiển thị ảnh trực tiếp của mọi cửa sổ Doomsday.
+   Thanh có viền và thanh tiêu đề màu xanh, nền vùng thumbnail màu tối giống giao diện tham chiếu.
 3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
 4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
 
