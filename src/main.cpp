@@ -1606,10 +1606,7 @@ void Layout(HWND hwnd) {
     MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
     int bottom = r.bottom - 28;
-    MoveWindow(GetDlgItem(hwnd, IDC_PLAN), gap, bottom, 70, 23, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_SUPPORT), 78, bottom, 72, 23, TRUE);
-    MoveWindow(GetDlgItem(hwnd, IDC_GROUP), 154, bottom, 86, 23, TRUE);
-    MoveWindow(g_status, 248, bottom + 3, std::max(60L, r.right - 254), 18, TRUE);
+    MoveWindow(g_status, gap, bottom + 3, std::max(60L, r.right - gap * 2), 18, TRUE);
 }
 
 COLORREF ButtonColor(int id) {
@@ -1731,9 +1728,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             button(IDC_PROXY, L"◉");
             button(IDC_THUMBNAILS, L"▤");
             button(IDC_SETTINGS, L"⚙");
-            button(IDC_PLAN, L"Miễn phí");
-            button(IDC_SUPPORT, L"☎  Hỗ trợ");
-            button(IDC_GROUP, L"Cộng đồng");
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
