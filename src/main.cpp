@@ -102,7 +102,7 @@ int g_activeRecording{-1};
 int g_syncFps{30};
 int g_playRepeat{1}, g_playGapSeconds{1};
 HWND g_source{};
-bool g_sync{}, g_recording{}, g_blockMove{};
+bool g_sync{}, g_recording{}, g_blockMove{}, g_refreshingRecords{};
 std::atomic_bool g_playing{false}, g_playPaused{false};
 ULONGLONG g_lastMouseMoveBroadcast{};
 std::chrono::steady_clock::time_point g_lastMacro;
@@ -126,6 +126,14 @@ DWORD LoadSettingDword(const wchar_t* name, DWORD fallback) {
     if (RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, name, RRF_RT_REG_DWORD,
                      &type, &value, &bytes) == ERROR_SUCCESS) return value;
     return fallback;
+}
+
+void SaveSettingDword(const wchar_t* name, DWORD value) {
+    HKEY key{};
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kSettingsKey, 0, nullptr, 0, KEY_SET_VALUE,
+                        nullptr, &key, nullptr) != ERROR_SUCCESS) return;
+    RegSetValueExW(key, name, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+    RegCloseKey(key);
 }
 
 void SaveLaunchSettings(const std::wstring& path, const std::wstring& args, DWORD count, DWORD delay) {
@@ -730,15 +738,24 @@ std::wstring MacroValue(const MacroEvent& event) {
 
 void RefreshRecordManager() {
     if (!g_recordList || !g_recordEvents) return;
+    g_refreshingRecords = true;
     ListView_DeleteAllItems(g_recordList);
     for (size_t i = 0; i < g_recordings.size(); ++i) {
         LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
         auto number = std::to_wstring(i + 1); item.pszText = number.data();
         int row = ListView_InsertItem(g_recordList, &item);
         ListView_SetItemText(g_recordList, row, 1, g_recordings[i].name.data());
+        if (static_cast<int>(i) == g_activeRecording) {
+            ListView_SetCheckState(g_recordList, row, TRUE);
+            ListView_SetItemState(g_recordList, row, LVIS_SELECTED | LVIS_FOCUSED,
+                                  LVIS_SELECTED | LVIS_FOCUSED);
+        }
     }
     ListView_DeleteAllItems(g_recordEvents);
-    if (g_activeRecording < 0 || g_activeRecording >= static_cast<int>(g_recordings.size())) return;
+    if (g_activeRecording < 0 || g_activeRecording >= static_cast<int>(g_recordings.size())) {
+        g_refreshingRecords = false;
+        return;
+    }
     const auto& events = g_recordings[static_cast<size_t>(g_activeRecording)].events;
     for (size_t i = 0; i < events.size(); ++i) {
         LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
@@ -751,6 +768,7 @@ void RefreshRecordManager() {
         auto delay = std::to_wstring(events[i].delayMs) + L" ms";
         ListView_SetItemText(g_recordEvents, row, 3, delay.data());
     }
+    g_refreshingRecords = false;
 }
 
 void AddRecording() {
@@ -867,6 +885,9 @@ LRESULT CALLBACK RecordEditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void ShowRecordEditor() {
+    // Recording must never leak physical input through the live synchronizer.
+    // It is an independent mode just like in the reference application.
+    if (g_sync) SetSync(false);
     if (g_recordEditor) { ShowWindow(g_recordEditor, SW_RESTORE); SetForegroundWindow(g_recordEditor); return; }
     static bool registered = false;
     if (!registered) {
@@ -884,6 +905,10 @@ void ShowRecordEditor() {
 LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_CREATE: {
+            g_playRepeat = std::clamp(static_cast<int>(LoadSettingDword(L"RecordRepeat", 1)), 1, 999999);
+            g_playGapSeconds = std::clamp(static_cast<int>(LoadSettingDword(L"RecordGapSeconds", 1)), 0, 3600);
+            const std::wstring repeatText = std::to_wstring(g_playRepeat);
+            const std::wstring gapText = std::to_wstring(g_playGapSeconds);
             auto button = [&](int id, const wchar_t* text, int x, int w) {
                 HWND c = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE, x, 10, w, 25, hwnd,
                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
@@ -892,11 +917,11 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             button(IDC_RECORD_START, L"Bắt đầu", 8, 74); button(IDC_RECORD_STOP, L"Kết thúc", 87, 74);
             g_recordStartButton = GetDlgItem(hwnd, IDC_RECORD_START);
             CreateWindowW(L"STATIC", L"Lặp lại:", WS_CHILD | WS_VISIBLE, 8, 65, 55, 22, hwnd, nullptr, g_instance, nullptr);
-            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1", WS_CHILD | WS_VISIBLE | ES_NUMBER,
+            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", repeatText.c_str(), WS_CHILD | WS_VISIBLE | ES_NUMBER,
                 64, 62, 60, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_REPEAT), g_instance, nullptr);
             CreateWindowW(L"STATIC", L"lần", WS_CHILD | WS_VISIBLE, 129, 65, 30, 22, hwnd, nullptr, g_instance, nullptr);
             CreateWindowW(L"STATIC", L"Giãn cách:", WS_CHILD | WS_VISIBLE, 8, 102, 62, 22, hwnd, nullptr, g_instance, nullptr);
-            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1", WS_CHILD | WS_VISIBLE | ES_NUMBER,
+            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", gapText.c_str(), WS_CHILD | WS_VISIBLE | ES_NUMBER,
                 72, 99, 52, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_GAP), g_instance, nullptr);
             CreateWindowW(L"STATIC", L"giây", WS_CHILD | WS_VISIBLE, 129, 102, 35, 22, hwnd, nullptr, g_instance, nullptr);
             g_recordList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
@@ -917,10 +942,15 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_NOTIFY: {
             auto* hdr = reinterpret_cast<NMHDR*>(lp);
-            if (hdr->idFrom == IDC_RECORD_LIST && hdr->code == LVN_ITEMCHANGED) {
-                int row = ListView_GetNextItem(g_recordList, -1, LVNI_SELECTED);
-                if (row >= 0 && row < static_cast<int>(g_recordings.size())) {
-                    g_activeRecording = row; g_macro = g_recordings[static_cast<size_t>(row)].events;
+            if (!g_refreshingRecords && hdr->idFrom == IDC_RECORD_LIST && hdr->code == LVN_ITEMCHANGED) {
+                auto* change = reinterpret_cast<NMLISTVIEW*>(lp);
+                int row = change->iItem;
+                if (row < 0) row = ListView_GetNextItem(g_recordList, -1, LVNI_SELECTED);
+                if (row >= 0 && row < static_cast<int>(g_recordings.size()) &&
+                    (ListView_GetCheckState(g_recordList, row) ||
+                     (ListView_GetItemState(g_recordList, row, LVIS_SELECTED) & LVIS_SELECTED))) {
+                    g_activeRecording = row;
+                    g_macro = g_recordings[static_cast<size_t>(row)].events;
                     RefreshRecordManager();
                 }
             }
@@ -938,9 +968,9 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_COMMAND: {
             const int id = LOWORD(wp);
-            auto readNumber = [&](int control, int fallback) {
+            auto readNumber = [&](int control) {
                 wchar_t text[32]{}; GetWindowTextW(GetDlgItem(hwnd, control), text, 32);
-                int value = _wtoi(text); return value > 0 ? value : fallback;
+                return _wtoi(text);
             };
             if (id == IDC_RECORD_START) {
                 if (g_playing) {
@@ -952,8 +982,10 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     MessageBoxW(hwnd, L"Hãy chọn một bản ghi có sự kiện trước khi bắt đầu.", L"Quản lí bản ghi", MB_ICONINFORMATION);
                     return 0;
                 }
-                g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT, 1), 1, 999999);
-                g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP, 1), 0, 3600);
+                g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT), 1, 999999);
+                g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP), 0, 3600);
+                SaveSettingDword(L"RecordRepeat", static_cast<DWORD>(g_playRepeat));
+                SaveSettingDword(L"RecordGapSeconds", static_cast<DWORD>(g_playGapSeconds));
                 SyncChecksFromList();
                 auto job = std::make_unique<PlaybackJob>();
                 job->events = g_macro;
@@ -997,6 +1029,15 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_recordStartButton) SetWindowTextW(g_recordStartButton, L"Bắt đầu");
             return 0;
         case WM_DESTROY:
+            {
+                wchar_t repeatText[32]{}, gapText[32]{};
+                GetWindowTextW(GetDlgItem(hwnd, IDC_RECORD_REPEAT), repeatText, 32);
+                GetWindowTextW(GetDlgItem(hwnd, IDC_RECORD_GAP), gapText, 32);
+                const DWORD repeat = static_cast<DWORD>(std::clamp(_wtoi(repeatText), 1, 999999));
+                const DWORD gap = static_cast<DWORD>(std::clamp(_wtoi(gapText), 0, 3600));
+                SaveSettingDword(L"RecordRepeat", repeat);
+                SaveSettingDword(L"RecordGapSeconds", gap);
+            }
             g_playing = false; g_playPaused = false;
             g_recordManager = g_recordList = g_recordEvents = g_recordStartButton = nullptr;
             return 0;
@@ -1005,6 +1046,9 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void ShowRecordManager() {
+    // Auto-click recording/playback is independent and must not require or
+    // accidentally leave live keyboard/mouse synchronization enabled.
+    if (g_sync) SetSync(false);
     if (g_recordManager) { ShowWindow(g_recordManager, SW_RESTORE); SetForegroundWindow(g_recordManager); return; }
     static bool registered = false;
     if (!registered) {
