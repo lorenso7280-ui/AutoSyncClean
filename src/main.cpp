@@ -1559,8 +1559,16 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HWND keep = CreateWindowW(L"BUTTON", L"Không thay đổi kích thước hiện tại", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                                       18, 47, 250, 22, hwnd, reinterpret_cast<HMENU>(IDC_ARRANGE_KEEP_SIZE), g_instance, nullptr);
             SendMessageW(keep, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
-            label(L"Kích thước cửa sổ:", 18, 83, 150); edit(IDC_ARRANGE_WIDTH, L"960", 174, 80, 68);
-            label(L"×", 249, 83, 18); edit(IDC_ARRANGE_HEIGHT, L"540", 270, 80, 68);
+            label(L"Kích thước cửa sổ:", 18, 83, 150);
+            HWND sizeCombo = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                CBS_DROPDOWNLIST | WS_VSCROLL, 174, 80, 164, 130, hwnd,
+                reinterpret_cast<HMENU>(IDC_ARRANGE_WIDTH), g_instance, nullptr);
+            SendMessageW(sizeCombo, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(sizeCombo, L"960x540");
+            ComboBox_AddString(sizeCombo, L"1280x720");
+            ComboBox_AddString(sizeCombo, L"1600x900");
+            ComboBox_AddString(sizeCombo, L"1920x1080");
+            ComboBox_SetCurSel(sizeCombo, 0);
             label(L"Vị trí cách trái (X):", 18, 119, 150); edit(IDC_ARRANGE_X, L"0", 174, 116, 68); label(L"Pixel", 250, 119, 45);
             label(L"Vị trí cách trên (Y):", 18, 155, 150); edit(IDC_ARRANGE_Y, L"20", 174, 152, 68); label(L"Pixel", 250, 155, 45);
             label(L"Độ lệch mỗi cửa sổ X:", 18, 191, 160); edit(IDC_ARRANGE_OFFSET_X, L"0", 174, 188, 68);
@@ -1573,8 +1581,13 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND:
             if (LOWORD(wp) == IDC_ARRANGE_OK) {
                 ArrangeRequest request;
-                request.width = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_WIDTH).c_str()), 320, 7680);
-                request.height = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_HEIGHT).c_str()), 240, 4320);
+                static constexpr int widths[]{960, 1280, 1600, 1920};
+                static constexpr int heights[]{540, 720, 900, 1080};
+                int sizeIndex = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_ARRANGE_WIDTH));
+                if (sizeIndex == CB_ERR) sizeIndex = 0;
+                sizeIndex = std::clamp(sizeIndex, 0, 3);
+                request.width = widths[sizeIndex];
+                request.height = heights[sizeIndex];
                 request.x = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_X).c_str()), 0, 30000);
                 request.y = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_Y).c_str()), 0, 30000);
                 request.offsetX = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_X).c_str()), 0, 2000);
