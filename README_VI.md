@@ -85,6 +85,8 @@ Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuy�
 3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
 4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
 
+Mỗi lần mở thanh thu nhỏ, danh sách được giữ nguyên thứ tự hiện tại và đánh số lại `Cửa sổ 1`, `Cửa sổ 2`… Các cửa sổ `ONLINE` được đổi luôn tiêu đề Windows, vì vậy tên trên thumbnail cũng đúng thứ tự. Dòng `OFFLINE` có thể nhấp phải và chọn **Xóa khỏi danh sách**; sau khi xóa, mở lại thanh thu nhỏ để đánh số liên tục từ đầu.
+
 ## Giới hạn kỹ thuật
 
 - Ứng dụng dùng hook bàn phím/chuột cấp thấp và gửi thông điệp Win32 tới cửa sổ đích.
