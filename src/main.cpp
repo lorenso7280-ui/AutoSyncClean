@@ -73,6 +73,8 @@ struct MacroEvent {
     double ny{};
     int wheel{};
     uint32_t delayMs{};
+    int pixelX{};
+    int pixelY{};
 };
 
 struct NamedRecording {
@@ -386,9 +388,9 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
         if (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP || msg == WM_MBUTTONUP) {
             UINT downMessage = msg == WM_LBUTTONUP ? WM_LBUTTONDOWN
                              : msg == WM_RBUTTONUP ? WM_RBUTTONDOWN : WM_MBUTTONDOWN;
-            AddMacro({MacroType::MouseClick, downMessage, nx, ny, 0, 0});
+            AddMacro({MacroType::MouseClick, downMessage, nx, ny, 0, 0, p.x, p.y});
         } else if (msg == WM_MOUSEWHEEL) {
-            AddMacro({MacroType::Wheel, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0});
+            AddMacro({MacroType::Wheel, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0, p.x, p.y});
         }
     }
 }
@@ -670,6 +672,23 @@ const wchar_t* MacroTypeName(MacroType type) {
     return L"";
 }
 
+std::wstring MacroValue(const MacroEvent& event) {
+    switch (event.type) {
+        case MacroType::MouseMove:
+        case MacroType::MouseDown:
+        case MacroType::MouseUp:
+        case MacroType::MouseClick:
+            return L"X: " + std::to_wstring(event.pixelX) + L", Y: " + std::to_wstring(event.pixelY);
+        case MacroType::Wheel:
+            return L"X: " + std::to_wstring(event.pixelX) + L", Y: " + std::to_wstring(event.pixelY) +
+                   L", Cuộn: " + std::to_wstring(event.wheel);
+        case MacroType::KeyDown:
+        case MacroType::KeyUp:
+            return L"Mã phím: " + std::to_wstring(event.data);
+    }
+    return L"";
+}
+
 void RefreshRecordManager() {
     if (!g_recordList || !g_recordEvents) return;
     ListView_DeleteAllItems(g_recordList);
@@ -688,7 +707,7 @@ void RefreshRecordManager() {
         int row = ListView_InsertItem(g_recordEvents, &item);
         auto type = std::wstring(MacroTypeName(events[i].type));
         ListView_SetItemText(g_recordEvents, row, 1, type.data());
-        auto value = std::to_wstring(events[i].data);
+        auto value = MacroValue(events[i]);
         ListView_SetItemText(g_recordEvents, row, 2, value.data());
         auto delay = std::to_wstring(events[i].delayMs) + L" ms";
         ListView_SetItemText(g_recordEvents, row, 3, delay.data());
@@ -711,7 +730,7 @@ void RefreshEditorEvents() {
         int row = ListView_InsertItem(g_editorEvents, &item);
         auto type = std::wstring(MacroTypeName(g_macro[i].type));
         ListView_SetItemText(g_editorEvents, row, 1, type.data());
-        auto value = std::to_wstring(g_macro[i].data);
+        auto value = MacroValue(g_macro[i]);
         ListView_SetItemText(g_editorEvents, row, 2, value.data());
         auto delay = std::to_wstring(g_macro[i].delayMs) + L" ms";
         ListView_SetItemText(g_editorEvents, row, 3, delay.data());
@@ -754,6 +773,10 @@ LRESULT CALLBACK RecordEditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             };
             col(g_editorEvents, 0, 45, L"Stt"); col(g_editorEvents, 1, 130, L"Sự kiện");
             col(g_editorEvents, 2, 110, L"Giá trị"); col(g_editorEvents, 3, 120, L"Thời gian");
+            EnumChildWindows(hwnd, [](HWND child, LPARAM font) -> BOOL {
+                SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
+                return TRUE;
+            }, reinterpret_cast<LPARAM>(g_uiFont));
             g_macro.clear();
             return 0;
         }
