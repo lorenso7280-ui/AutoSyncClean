@@ -7,6 +7,7 @@
 - Khi khởi động, danh sách luôn trống. Kéo nút tròn vào một cửa sổ game sẽ nhận diện đường dẫn file tiến trình và tự quét toàn bộ cửa sổ/tab đang chạy từ cùng file game.
 - Việc quét theo tiến trình vẫn hoạt động sau khi tắt hẳn rồi mở lại AutoSync Clean, kể cả khi các thanh tiêu đề game trước đó đã được đổi thành `Cửa sổ 1`, `Cửa sổ 2`…
 - Giữ các cửa sổ đã nhận trong danh sách và tự đổi trạng thái `ONLINE`/`OFFLINE` khi game mở hoặc đóng.
+- Làm mới trạng thái theo chu kỳ mà không xóa trắng hoặc làm chớp danh sách; vị trí cuộn và dòng đang chọn được giữ nguyên.
 - Kéo biểu tượng tròn bên trái rồi thả vào cửa sổ Doomsday để nhận cửa sổ thủ công.
 - Sau khi nhận cửa sổ đầu tiên, các cửa sổ mới có cùng tiêu đề game sẽ tự động được thêm vào cùng nhóm.
 - Các cửa sổ mới được thêm vào với checkbox mặc định bỏ chọn; chỉ những dòng người dùng tự tích mới nhận thao tác đồng bộ.
