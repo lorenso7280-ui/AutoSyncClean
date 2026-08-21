@@ -32,6 +32,14 @@ enum : int {
 };
 
 enum : int {
+    IDC_SETTINGS_AUTORENAME = 3201, IDC_SETTINGS_DELAY, IDC_SETTINGS_FPS_ENABLE,
+    IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE,
+    IDC_RECORD_START = 3301, IDC_RECORD_STOP, IDC_RECORD_REPEAT, IDC_RECORD_GAP,
+    IDC_RECORD_LIST, IDC_RECORD_EVENTS,
+    IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL
+};
+
+enum : int {
     IDC_LAUNCH_PATH = 3001, IDC_LAUNCH_BROWSE, IDC_LAUNCH_ARGS,
     IDC_LAUNCH_COUNT, IDC_LAUNCH_DELAY, IDC_LAUNCH_OK
 };
@@ -65,17 +73,27 @@ struct MacroEvent {
     uint32_t delayMs{};
 };
 
+struct NamedRecording {
+    std::wstring name;
+    std::vector<MacroEvent> events;
+};
+
 HINSTANCE g_instance{};
 HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
 HWND g_launcher{};
 HWND g_arranger{};
 HWND g_thumbnailViewer{};
+HWND g_settingsWindow{}, g_recordManager{}, g_recordList{}, g_recordEvents{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
 std::vector<ThumbnailItem> g_thumbnails;
 std::unordered_set<HWND> g_ignored;
 std::vector<MacroEvent> g_macro;
+std::vector<NamedRecording> g_recordings;
+int g_activeRecording{-1};
+int g_syncFps{30};
+int g_playRepeat{1}, g_playGapSeconds{1};
 HWND g_source{};
 bool g_sync{}, g_recording{}, g_playing{}, g_blockMove{};
 ULONGLONG g_lastMouseMoveBroadcast{};
@@ -338,7 +356,8 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
     if (msg == WM_MOUSEMOVE && g_blockMove) return;
     if (msg == WM_MOUSEMOVE) {
         ULONGLONG now = GetTickCount64();
-        if (now - g_lastMouseMoveBroadcast < 16) return;
+        const ULONGLONG interval = static_cast<ULONGLONG>(std::max(1, 1000 / std::clamp(g_syncFps, 1, 60)));
+        if (now - g_lastMouseMoveBroadcast < interval) return;
         g_lastMouseMoveBroadcast = now;
     }
     const bool critical = msg != WM_MOUSEMOVE;
@@ -457,19 +476,23 @@ void TileSelected() {
 
 DWORD WINAPI PlayThread(void*) {
     g_playing = true;
-    for (const auto& e : g_macro) {
-        if (!g_playing) break;
-        Sleep(e.delayMs);
-        ForTargets([&](HWND h) {
-            switch (e.type) {
-                case MacroType::KeyDown: PostMessageW(h, WM_KEYDOWN, e.data, 1); break;
-                case MacroType::KeyUp: PostMessageW(h, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
-                case MacroType::MouseMove: PostMessageW(h, WM_MOUSEMOVE, 0, ScaledPoint(h, e.nx, e.ny)); break;
-                case MacroType::MouseDown: PostMessageW(h, e.data, e.data == WM_LBUTTONDOWN ? MK_LBUTTON : MK_RBUTTON, ScaledPoint(h, e.nx, e.ny)); break;
-                case MacroType::MouseUp: PostMessageW(h, e.data, 0, ScaledPoint(h, e.nx, e.ny)); break;
-                case MacroType::Wheel: PostMessageW(h, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(h, e.nx, e.ny)); break;
-            }
-        });
+    const int repeat = std::clamp(g_playRepeat, 1, 999999);
+    for (int pass = 0; pass < repeat && g_playing; ++pass) {
+        for (const auto& e : g_macro) {
+            if (!g_playing) break;
+            Sleep(e.delayMs);
+            ForTargets([&](HWND h) {
+                switch (e.type) {
+                    case MacroType::KeyDown: PostMessageW(h, WM_KEYDOWN, e.data, 1); break;
+                    case MacroType::KeyUp: PostMessageW(h, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
+                    case MacroType::MouseMove: PostMessageW(h, WM_MOUSEMOVE, 0, ScaledPoint(h, e.nx, e.ny)); break;
+                    case MacroType::MouseDown: PostMessageW(h, e.data, e.data == WM_LBUTTONDOWN ? MK_LBUTTON : MK_RBUTTON, ScaledPoint(h, e.nx, e.ny)); break;
+                    case MacroType::MouseUp: PostMessageW(h, e.data, 0, ScaledPoint(h, e.nx, e.ny)); break;
+                    case MacroType::Wheel: PostMessageW(h, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(h, e.nx, e.ny)); break;
+                }
+            });
+        }
+        if (g_playing && pass + 1 < repeat) Sleep(static_cast<DWORD>(std::clamp(g_playGapSeconds, 0, 3600) * 1000));
     }
     g_playing = false;
     SetStatus(L"Đã phát xong chuỗi thao tác.");
@@ -487,6 +510,8 @@ void ToggleRecord() {
         SetStatus(L"Đang ghi chuỗi thao tác...");
     } else {
         SetWindowTextW(b, L"● Ghi thao tác");
+        if (g_activeRecording >= 0 && g_activeRecording < static_cast<int>(g_recordings.size()))
+            g_recordings[static_cast<size_t>(g_activeRecording)].events = g_macro;
         SetStatus(L"Đã ghi " + std::to_wstring(g_macro.size()) + L" sự kiện.");
     }
 }
@@ -512,16 +537,224 @@ void ShowProxyManager() {
         L"Quản lý Proxy", MB_OK | MB_ICONINFORMATION);
 }
 
+LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CREATE: {
+            auto label = [&](const wchar_t* text, int x, int y, int w) {
+                HWND c = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, w, 22,
+                                       hwnd, nullptr, g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            };
+            HWND rename = CreateWindowW(L"BUTTON", L"Tự động đổi tên cửa sổ sau khi kết nối thành công",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 24, 330, 24, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_AUTORENAME), g_instance, nullptr);
+            SendMessageW(rename, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            Button_SetCheck(rename, BST_CHECKED);
+            label(L"[+] Thời gian giãn cách mở cửa sổ:", 22, 62, 235);
+            HWND delay = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"2000",
+                WS_CHILD | WS_VISIBLE | ES_NUMBER, 258, 59, 68, 23, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_DELAY), g_instance, nullptr);
+            SendMessageW(delay, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            label(L"(Mili giây)", 337, 62, 90);
+            HWND enable = CreateWindowW(L"BUTTON", L"Thay đổi FPS",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 99, 150, 24, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_FPS_ENABLE), g_instance, nullptr);
+            SendMessageW(enable, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            Button_SetCheck(enable, BST_CHECKED);
+            HWND slider = CreateWindowW(TRACKBAR_CLASSW, L"", WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
+                56, 130, 210, 35, hwnd, reinterpret_cast<HMENU>(IDC_SETTINGS_FPS_SLIDER), g_instance, nullptr);
+            SendMessageW(slider, TBM_SETRANGE, TRUE, MAKELPARAM(1, 60));
+            SendMessageW(slider, TBM_SETTICFREQ, 5, 0);
+            SendMessageW(slider, TBM_SETPOS, TRUE, 30);
+            g_syncFps = 30;
+            HWND value = CreateWindowW(L"STATIC", L"30", WS_CHILD | WS_VISIBLE | SS_CENTER,
+                278, 136, 42, 22, hwnd, reinterpret_cast<HMENU>(IDC_SETTINGS_FPS_VALUE), g_instance, nullptr);
+            SendMessageW(value, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            label(L"(FPS)", 326, 136, 50);
+            label(L"FPS điều chỉnh tần suất truyền chuyển động chuột; mặc định 30.", 22, 183, 420);
+            label(L"Phạm vi hợp lệ: 1 đến 60 FPS.", 22, 207, 350);
+            return 0;
+        }
+        case WM_HSCROLL:
+            if (reinterpret_cast<HWND>(lp) == GetDlgItem(hwnd, IDC_SETTINGS_FPS_SLIDER)) {
+                int fps = static_cast<int>(SendMessageW(reinterpret_cast<HWND>(lp), TBM_GETPOS, 0, 0));
+                g_syncFps = std::clamp(fps, 1, 60);
+                SetWindowTextW(GetDlgItem(hwnd, IDC_SETTINGS_FPS_VALUE), std::to_wstring(g_syncFps).c_str());
+                SetStatus(L"FPS đồng bộ: " + std::to_wstring(g_syncFps));
+            }
+            return 0;
+        case WM_COMMAND:
+            if (LOWORD(wp) == IDC_SETTINGS_FPS_ENABLE) {
+                const bool enabled = Button_GetCheck(GetDlgItem(hwnd, IDC_SETTINGS_FPS_ENABLE)) == BST_CHECKED;
+                EnableWindow(GetDlgItem(hwnd, IDC_SETTINGS_FPS_SLIDER), enabled);
+                if (!enabled) g_syncFps = 30;
+            }
+            return 0;
+        case WM_DESTROY: g_settingsWindow = nullptr; return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
 void ShowSettings() {
-    int answer = MessageBoxW(g_main,
-        g_blockMove
-            ? L"Đồng bộ chuyển động chuột đang TẮT.\n\nBấm Có để bật đồng bộ chuyển động chuột."
-            : L"Đồng bộ chuyển động chuột đang BẬT.\n\nBấm Không để tắt chuyển động chuột nhưng vẫn giữ click và bàn phím.",
-        L"Thiết lập đồng bộ", MB_YESNOCANCEL | MB_ICONQUESTION);
-    if (answer == IDYES) g_blockMove = false;
-    else if (answer == IDNO) g_blockMove = true;
-    if (answer != IDCANCEL)
-        SetStatus(g_blockMove ? L"Đã tắt đồng bộ chuyển động chuột." : L"Đã bật đồng bộ chuyển động chuột.");
+    if (g_settingsWindow) { ShowWindow(g_settingsWindow, SW_RESTORE); SetForegroundWindow(g_settingsWindow); return; }
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = SettingsProc; wc.hInstance = g_instance;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.lpszClassName = L"AutoSyncClean.Settings"; RegisterClassExW(&wc); registered = true;
+    }
+    RECT owner{}; GetWindowRect(g_main, &owner);
+    g_settingsWindow = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.Settings", L"Thiết lập",
+        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 60, 470, 290,
+        g_main, nullptr, g_instance, nullptr);
+    ShowWindow(g_settingsWindow, SW_SHOW); UpdateWindow(g_settingsWindow);
+}
+
+const wchar_t* MacroTypeName(MacroType type) {
+    switch (type) {
+        case MacroType::KeyDown: return L"Phím xuống";
+        case MacroType::KeyUp: return L"Phím lên";
+        case MacroType::MouseMove: return L"Di chuyển chuột";
+        case MacroType::MouseDown: return L"Nhấn chuột";
+        case MacroType::MouseUp: return L"Thả chuột";
+        case MacroType::Wheel: return L"Cuộn chuột";
+    }
+    return L"";
+}
+
+void RefreshRecordManager() {
+    if (!g_recordList || !g_recordEvents) return;
+    ListView_DeleteAllItems(g_recordList);
+    for (size_t i = 0; i < g_recordings.size(); ++i) {
+        LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
+        auto number = std::to_wstring(i + 1); item.pszText = number.data();
+        int row = ListView_InsertItem(g_recordList, &item);
+        ListView_SetItemText(g_recordList, row, 1, g_recordings[i].name.data());
+    }
+    ListView_DeleteAllItems(g_recordEvents);
+    if (g_activeRecording < 0 || g_activeRecording >= static_cast<int>(g_recordings.size())) return;
+    const auto& events = g_recordings[static_cast<size_t>(g_activeRecording)].events;
+    for (size_t i = 0; i < events.size(); ++i) {
+        LVITEMW item{}; item.mask = LVIF_TEXT; item.iItem = static_cast<int>(i);
+        auto number = std::to_wstring(i + 1); item.pszText = number.data();
+        int row = ListView_InsertItem(g_recordEvents, &item);
+        auto type = std::wstring(MacroTypeName(events[i].type));
+        ListView_SetItemText(g_recordEvents, row, 1, type.data());
+        auto value = std::to_wstring(events[i].data);
+        ListView_SetItemText(g_recordEvents, row, 2, value.data());
+        auto delay = std::to_wstring(events[i].delayMs) + L" ms";
+        ListView_SetItemText(g_recordEvents, row, 3, delay.data());
+    }
+}
+
+void AddRecording() {
+    std::wstring name = L"Bản ghi " + std::to_wstring(g_recordings.size() + 1) + L".json";
+    g_recordings.push_back({name, {}});
+    g_activeRecording = static_cast<int>(g_recordings.size()) - 1;
+    g_macro.clear(); RefreshRecordManager();
+}
+
+LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CREATE: {
+            auto button = [&](int id, const wchar_t* text, int x, int w) {
+                HWND c = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE, x, 10, w, 25, hwnd,
+                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), g_instance, nullptr);
+                SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            };
+            button(IDC_RECORD_START, L"Bắt đầu", 8, 74); button(IDC_RECORD_STOP, L"Kết thúc", 87, 74);
+            CreateWindowW(L"STATIC", L"Lặp lại:", WS_CHILD | WS_VISIBLE, 8, 65, 55, 22, hwnd, nullptr, g_instance, nullptr);
+            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1", WS_CHILD | WS_VISIBLE | ES_NUMBER,
+                64, 62, 60, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_REPEAT), g_instance, nullptr);
+            CreateWindowW(L"STATIC", L"lần", WS_CHILD | WS_VISIBLE, 129, 65, 30, 22, hwnd, nullptr, g_instance, nullptr);
+            CreateWindowW(L"STATIC", L"Giãn cách:", WS_CHILD | WS_VISIBLE, 8, 102, 62, 22, hwnd, nullptr, g_instance, nullptr);
+            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1", WS_CHILD | WS_VISIBLE | ES_NUMBER,
+                72, 99, 52, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_GAP), g_instance, nullptr);
+            CreateWindowW(L"STATIC", L"giây", WS_CHILD | WS_VISIBLE, 129, 102, 35, 22, hwnd, nullptr, g_instance, nullptr);
+            g_recordList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
+                166, 10, 225, 330, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_LIST), g_instance, nullptr);
+            g_recordEvents = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT,
+                395, 10, 355, 330, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_EVENTS), g_instance, nullptr);
+            ListView_SetExtendedListViewStyle(g_recordList, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER);
+            ListView_SetExtendedListViewStyle(g_recordEvents, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+            auto col = [](HWND list, int index, int width, const wchar_t* text) {
+                LVCOLUMNW c{sizeof(c)}; c.mask = LVCF_TEXT | LVCF_WIDTH; c.cx = width; c.pszText = const_cast<wchar_t*>(text);
+                ListView_InsertColumn(list, index, &c);
+            };
+            col(g_recordList, 0, 28, L"#"); col(g_recordList, 1, 190, L"Tên bản ghi");
+            col(g_recordEvents, 0, 45, L"Stt"); col(g_recordEvents, 1, 115, L"Sự kiện");
+            col(g_recordEvents, 2, 100, L"Giá trị"); col(g_recordEvents, 3, 90, L"Thời gian");
+            if (g_recordings.empty()) AddRecording(); else RefreshRecordManager();
+            return 0;
+        }
+        case WM_NOTIFY: {
+            auto* hdr = reinterpret_cast<NMHDR*>(lp);
+            if (hdr->idFrom == IDC_RECORD_LIST && hdr->code == LVN_ITEMCHANGED) {
+                int row = ListView_GetNextItem(g_recordList, -1, LVNI_SELECTED);
+                if (row >= 0 && row < static_cast<int>(g_recordings.size())) {
+                    g_activeRecording = row; g_macro = g_recordings[static_cast<size_t>(row)].events;
+                    RefreshRecordManager();
+                }
+            }
+            return 0;
+        }
+        case WM_CONTEXTMENU:
+            if (reinterpret_cast<HWND>(wp) == g_recordList) {
+                HMENU menu = CreatePopupMenu();
+                AppendMenuW(menu, MF_STRING, IDM_RECORD_ADD, L"Thêm bản ghi");
+                AppendMenuW(menu, MF_STRING, IDM_RECORD_DELETE, L"Xóa bản ghi");
+                AppendMenuW(menu, MF_STRING, IDM_RECORD_DELETE_ALL, L"Xóa tất cả");
+                TrackPopupMenu(menu, TPM_RIGHTBUTTON, GET_X_LPARAM(lp), GET_Y_LPARAM(lp), 0, hwnd, nullptr);
+                DestroyMenu(menu);
+            }
+            return 0;
+        case WM_COMMAND: {
+            const int id = LOWORD(wp);
+            auto readNumber = [&](int control, int fallback) {
+                wchar_t text[32]{}; GetWindowTextW(GetDlgItem(hwnd, control), text, 32);
+                int value = _wtoi(text); return value > 0 ? value : fallback;
+            };
+            if (id == IDC_RECORD_START) {
+                if (g_activeRecording < 0) AddRecording();
+                g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT, 1), 1, 999999);
+                g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP, 1), 0, 3600);
+                if (!g_macro.empty() && !g_playing)
+                    CloseHandle(CreateThread(nullptr, 0, PlayThread, nullptr, 0, nullptr));
+            } else if (id == IDC_RECORD_STOP) {
+                g_playing = false;
+                if (g_recording) ToggleRecord();
+                RefreshRecordManager();
+            } else if (id == IDM_RECORD_ADD) {
+                AddRecording();
+                if (!g_recording) ToggleRecord();
+            }
+            else if (id == IDM_RECORD_DELETE && g_activeRecording >= 0) {
+                g_recordings.erase(g_recordings.begin() + g_activeRecording);
+                g_activeRecording = g_recordings.empty() ? -1 : std::min(g_activeRecording, static_cast<int>(g_recordings.size()) - 1);
+                g_macro = g_activeRecording >= 0 ? g_recordings[static_cast<size_t>(g_activeRecording)].events : std::vector<MacroEvent>{};
+                RefreshRecordManager();
+            } else if (id == IDM_RECORD_DELETE_ALL) {
+                g_recordings.clear(); g_activeRecording = -1; g_macro.clear(); RefreshRecordManager();
+            }
+            return 0;
+        }
+        case WM_DESTROY: g_recordManager = g_recordList = g_recordEvents = nullptr; return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void ShowRecordManager() {
+    if (g_recordManager) { ShowWindow(g_recordManager, SW_RESTORE); SetForegroundWindow(g_recordManager); return; }
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = RecordManagerProc; wc.hInstance = g_instance;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.lpszClassName = L"AutoSyncClean.RecordManager"; RegisterClassExW(&wc); registered = true;
+    }
+    g_recordManager = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.RecordManager", L"Quản lí bản ghi",
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT, CW_USEDEFAULT, 770, 390,
+        g_main, nullptr, g_instance, nullptr);
+    ShowWindow(g_recordManager, SW_SHOW); UpdateWindow(g_recordManager);
 }
 
 void ShowContextMenu(POINT p) {
@@ -1285,8 +1518,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case IDC_TILE: ShowArranger(); break;
                 case IDC_THUMBNAILS: ToggleThumbnailViewer(); break;
                 case IDC_RECORD: {
-                    RECT rc{}; GetWindowRect(GetDlgItem(hwnd, IDC_RECORD), &rc);
-                    ShowRecordMenu({rc.left, rc.bottom});
+                    ShowRecordManager();
                     break;
                 }
                 case IDC_PROXY: ShowProxyManager(); break;
@@ -1318,7 +1550,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_instance = instance;
-    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES};
+    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
     WNDCLASSEXW wc{sizeof(wc)};
     wc.lpfnWndProc = WndProc;
