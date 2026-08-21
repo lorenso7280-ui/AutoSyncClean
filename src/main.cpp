@@ -581,11 +581,44 @@ void HandleMenu(int id) {
                 if (window.selected && IsWindow(window.hwnd)) ShowWindow(window.hwnd, SW_RESTORE);
             break;
         case IDM_CLOSE_ALL: {
-            SyncChecksFromList();
             if (g_sync) SetSync(false);
+            std::vector<HWND> online;
             for (const auto& window : g_windows)
-                if (window.selected && IsWindow(window.hwnd)) PostMessageW(window.hwnd, WM_CLOSE, 0, 0);
-            SetStatus(L"Đã gửi lệnh đóng tới tất cả cửa sổ được chọn, bao gồm cửa sổ chính.");
+                if (IsWindow(window.hwnd)) online.push_back(window.hwnd);
+            if (online.empty()) {
+                SetStatus(L"Không có cửa sổ game ONLINE để đóng.");
+                break;
+            }
+
+            // Ask every game to close at once. Do not depend on sync checkboxes.
+            for (HWND target : online) {
+                PostMessageW(target, WM_CLOSE, 0, 0);
+                SendNotifyMessageW(target, WM_SYSCOMMAND, SC_CLOSE, 0);
+            }
+            Sleep(300);
+
+            // Games that ignore WM_CLOSE are force-terminated by their exact
+            // tracked process id so bulk close finishes quickly and reliably.
+            std::unordered_set<DWORD> remainingProcesses;
+            for (HWND target : online) {
+                if (!IsWindow(target)) continue;
+                DWORD pid{};
+                GetWindowThreadProcessId(target, &pid);
+                if (pid) remainingProcesses.insert(pid);
+            }
+            int forced = 0;
+            for (DWORD pid : remainingProcesses) {
+                HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pid);
+                if (!process) continue;
+                if (TerminateProcess(process, 0)) ++forced;
+                CloseHandle(process);
+            }
+            Sleep(100);
+            RefreshWindows();
+            std::wstring closeStatus = L"Đã đóng " + std::to_wstring(online.size()) + L" cửa sổ game";
+            if (forced) closeStatus += L"; buộc tắt " + std::to_wstring(forced) + L" tiến trình còn treo.";
+            else closeStatus += L".";
+            SetStatus(closeStatus);
             break;
         }
         case IDM_REMOVE_ALL:
