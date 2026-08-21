@@ -24,9 +24,11 @@ constexpr wchar_t kTitle[] = L"AutoSync Clean 1.0 - Đồng Bộ Thao Tác Phím
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
     IDC_PLAY, IDC_THUMBNAILS, IDC_LIST, IDC_STATUS, IDC_PLAN, IDC_SUPPORT, IDC_GROUP,
+    IDC_PROXY, IDC_SETTINGS,
     IDM_SET_MAIN = 2001, IDM_TOGGLE_ITEM, IDM_REFRESH, IDM_CLOSE_ONE,
     IDM_REMOVE_ONE, IDM_SELECT_ALL, IDM_CLEAR_ALL, IDM_SHOW_ALL,
-    IDM_CLOSE_ALL, IDM_REMOVE_ALL
+    IDM_CLOSE_ALL, IDM_REMOVE_ALL, IDM_RECORD_TOGGLE, IDM_RECORD_PLAY,
+    IDM_RECORD_CLEAR
 };
 
 enum : int {
@@ -489,13 +491,49 @@ void ToggleRecord() {
     }
 }
 
+void ShowRecordMenu(POINT p) {
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, IDM_RECORD_TOGGLE,
+                g_recording ? L"Dừng ghi thao tác" : L"Bắt đầu ghi thao tác");
+    AppendMenuW(menu, g_macro.empty() ? MF_GRAYED : MF_STRING,
+                IDM_RECORD_PLAY, L"Phát bản ghi");
+    AppendMenuW(menu, g_macro.empty() ? MF_GRAYED : MF_STRING,
+                IDM_RECORD_CLEAR, L"Xóa bản ghi");
+    TrackPopupMenu(menu, TPM_RIGHTBUTTON, p.x, p.y, 0, g_main, nullptr);
+    DestroyMenu(menu);
+}
+
+void ShowProxyManager() {
+    MessageBoxW(g_main,
+        L"Quản lý Proxy\n\n"
+        L"Proxy chỉ có thể áp dụng khi game/launcher hỗ trợ tham số proxy hoặc cấu hình hệ thống. "
+        L"AutoSync Clean không tiêm DLL vào game nên không ép proxy riêng cho từng tiến trình.\n\n"
+        L"Hãy cấu hình proxy trong Windows hoặc launcher trước khi mở các cửa sổ game.",
+        L"Quản lý Proxy", MB_OK | MB_ICONINFORMATION);
+}
+
+void ShowSettings() {
+    int answer = MessageBoxW(g_main,
+        g_blockMove
+            ? L"Đồng bộ chuyển động chuột đang TẮT.\n\nBấm Có để bật đồng bộ chuyển động chuột."
+            : L"Đồng bộ chuyển động chuột đang BẬT.\n\nBấm Không để tắt chuyển động chuột nhưng vẫn giữ click và bàn phím.",
+        L"Thiết lập đồng bộ", MB_YESNOCANCEL | MB_ICONQUESTION);
+    if (answer == IDYES) g_blockMove = false;
+    else if (answer == IDNO) g_blockMove = true;
+    if (answer != IDCANCEL)
+        SetStatus(g_blockMove ? L"Đã tắt đồng bộ chuyển động chuột." : L"Đã bật đồng bộ chuyển động chuột.");
+}
+
 void ShowContextMenu(POINT p) {
     POINT clientPoint = p;
     ScreenToClient(g_list, &clientPoint);
     LVHITTESTINFO hit{};
     hit.pt = clientPoint;
     int row = ListView_HitTest(g_list, &hit);
-    if (row < 0 || row >= static_cast<int>(g_windows.size())) return;
+    if (row < 0 || row >= static_cast<int>(g_windows.size())) {
+        ShowRecordMenu(p);
+        return;
+    }
     ListView_SetItemState(g_list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
     ListView_SetItemState(g_list, row, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
     ListView_EnsureVisible(g_list, row, FALSE);
@@ -1004,10 +1042,11 @@ void Layout(HWND hwnd) {
     MoveWindow(GetDlgItem(hwnd, IDC_SET_MAIN), 35, top, 28, buttonH, TRUE);
     MoveWindow(g_btnSync, 67, top, 104, buttonH, TRUE);
     int right = r.right - gap;
-    MoveWindow(GetDlgItem(hwnd, IDC_PLAY), right - 28, top, 28, buttonH, TRUE); right -= 32;
-    MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE); right -= 32;
+    MoveWindow(GetDlgItem(hwnd, IDC_SETTINGS), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_THUMBNAILS), right - 28, top, 28, buttonH, TRUE); right -= 32;
-    MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_PROXY), right - 28, top, 28, buttonH, TRUE); right -= 32;
+    MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE); right -= 32;
+    MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
     int bottom = r.bottom - 28;
     MoveWindow(GetDlgItem(hwnd, IDC_PLAN), gap, bottom, 70, 23, TRUE);
@@ -1070,10 +1109,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SetWindowSubclass(picker, WindowPickerProc, 1, 0);
             button(IDC_SET_MAIN, L"▣");
             g_btnSync = button(IDC_SYNC, L"⟳  Bật đồng bộ");
+            button(IDC_RECORD, L"Ⓡ");
             button(IDC_TILE, L"▦");
+            button(IDC_PROXY, L"◉");
             button(IDC_THUMBNAILS, L"▤");
-            button(IDC_RECORD, L"●");
-            button(IDC_PLAY, L"▶");
+            button(IDC_SETTINGS, L"⚙");
             button(IDC_PLAN, L"Miễn phí");
             button(IDC_SUPPORT, L"☎  Hỗ trợ");
             button(IDC_GROUP, L"Cộng đồng");
@@ -1118,17 +1158,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND: {
             int id = LOWORD(wp);
             if (id >= IDM_SET_MAIN && id <= IDM_REMOVE_ALL) { HandleMenu(id); return 0; }
+            if (id == IDM_RECORD_TOGGLE) { ToggleRecord(); return 0; }
+            if (id == IDM_RECORD_PLAY) {
+                if (!g_macro.empty() && !g_playing) CloseHandle(CreateThread(nullptr, 0, PlayThread, nullptr, 0, nullptr));
+                return 0;
+            }
+            if (id == IDM_RECORD_CLEAR) {
+                g_macro.clear(); g_recording = false;
+                SetStatus(L"Đã xóa bản ghi thao tác.");
+                return 0;
+            }
             switch (id) {
                 case IDC_REFRESH: RefreshWindows(true); break;
                 case IDC_SYNC: SetSync(!g_sync); break;
                 case IDC_SET_MAIN: ShowLauncher(); break;
                 case IDC_TILE: ShowArranger(); break;
                 case IDC_THUMBNAILS: ToggleThumbnailViewer(); break;
-                case IDC_RECORD: ToggleRecord(); break;
-                case IDC_PLAY:
-                    if (g_macro.empty()) MessageBoxW(hwnd, L"Chưa có chuỗi thao tác nào được ghi.", kTitle, MB_ICONINFORMATION);
-                    else if (!g_playing) CloseHandle(CreateThread(nullptr, 0, PlayThread, nullptr, 0, nullptr));
+                case IDC_RECORD: {
+                    RECT rc{}; GetWindowRect(GetDlgItem(hwnd, IDC_RECORD), &rc);
+                    ShowRecordMenu({rc.left, rc.bottom});
                     break;
+                }
+                case IDC_PROXY: ShowProxyManager(); break;
+                case IDC_SETTINGS: ShowSettings(); break;
             }
             return 0;
         }
