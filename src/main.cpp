@@ -959,16 +959,22 @@ void RefreshThumbnailViewer(bool force = false) {
 
 LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-        case WM_CREATE:
+        case WM_CREATE: {
             g_thumbnailViewer = hwnd;
+            const COLORREF blue = RGB(43, 139, 226);
+            DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue)); // border
+            DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue)); // caption
             RefreshThumbnailViewer(true);
             return 0;
+        }
         case WM_SIZE:
             LayoutThumbnails(hwnd);
             return 0;
         case WM_ERASEBKGND: {
             RECT client{}; GetClientRect(hwnd, &client);
-            FillRect(reinterpret_cast<HDC>(wp), &client, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
+            HBRUSH dark = CreateSolidBrush(RGB(55, 49, 46));
+            FillRect(reinterpret_cast<HDC>(wp), &client, dark);
+            DeleteObject(dark);
             return TRUE;
         }
         case WM_LBUTTONDOWN: {
@@ -1109,6 +1115,62 @@ COLORREF ButtonColor(int id) {
     }
 }
 
+bool IsToolbarGlyph(int id) {
+    return id == IDC_RECORD || id == IDC_TILE || id == IDC_PROXY ||
+           id == IDC_THUMBNAILS || id == IDC_SETTINGS;
+}
+
+void DrawToolbarGlyph(HDC dc, RECT rc, int id) {
+    const int cx = (rc.left + rc.right) / 2;
+    const int cy = (rc.top + rc.bottom) / 2;
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(55, 63, 70));
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+
+    if (id == IDC_RECORD) {
+        HPEN dotted = CreatePen(PS_DOT, 1, RGB(55, 63, 70));
+        SelectObject(dc, dotted);
+        Ellipse(dc, cx - 9, cy - 9, cx + 9, cy + 9);
+        SelectObject(dc, pen);
+        Ellipse(dc, cx - 6, cy - 6, cx + 6, cy + 6);
+        RECT text{cx - 6, cy - 7, cx + 7, cy + 7};
+        SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(55, 63, 70));
+        DrawTextW(dc, L"R", 1, &text, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DeleteObject(dotted);
+    } else if (id == IDC_TILE) {
+        for (int y = 0; y < 2; ++y)
+            for (int x = 0; x < 2; ++x)
+                Rectangle(dc, cx - 8 + x * 9, cy - 8 + y * 9,
+                           cx - 1 + x * 9, cy - 1 + y * 9);
+    } else if (id == IDC_PROXY) {
+        Ellipse(dc, cx - 9, cy - 9, cx + 9, cy + 9);
+        Ellipse(dc, cx - 5, cy - 9, cx + 5, cy + 9);
+        MoveToEx(dc, cx - 9, cy, nullptr); LineTo(dc, cx + 9, cy);
+        MoveToEx(dc, cx - 7, cy - 5, nullptr); LineTo(dc, cx + 7, cy - 5);
+        MoveToEx(dc, cx - 7, cy + 5, nullptr); LineTo(dc, cx + 7, cy + 5);
+        HBRUSH dot = CreateSolidBrush(RGB(55, 63, 70));
+        SelectObject(dc, dot); Ellipse(dc, cx + 3, cy + 3, cx + 9, cy + 9);
+        SelectObject(dc, GetStockObject(NULL_BRUSH)); DeleteObject(dot);
+    } else if (id == IDC_THUMBNAILS) {
+        Rectangle(dc, cx - 10, cy - 7, cx + 10, cy + 6);
+        MoveToEx(dc, cx - 6, cy - 3, nullptr); LineTo(dc, cx + 6, cy - 3);
+        for (int x = -5; x <= 5; x += 5) Ellipse(dc, cx + x - 1, cy, cx + x + 1, cy + 2);
+        MoveToEx(dc, cx, cy + 6, nullptr); LineTo(dc, cx, cy + 9);
+        MoveToEx(dc, cx - 5, cy + 9, nullptr); LineTo(dc, cx + 5, cy + 9);
+    } else if (id == IDC_SETTINGS) {
+        Ellipse(dc, cx - 6, cy - 6, cx + 6, cy + 6);
+        Ellipse(dc, cx - 2, cy - 2, cx + 2, cy + 2);
+        for (int i = 0; i < 8; ++i) {
+            const double angle = i * 3.14159265358979323846 / 4.0;
+            MoveToEx(dc, cx + static_cast<int>(6 * cos(angle)), cy + static_cast<int>(6 * sin(angle)), nullptr);
+            LineTo(dc, cx + static_cast<int>(10 * cos(angle)), cy + static_cast<int>(10 * sin(angle)));
+        }
+    }
+    SelectObject(dc, oldBrush);
+    SelectObject(dc, oldPen);
+    DeleteObject(pen);
+}
+
 void DrawButton(const DRAWITEMSTRUCT* d) {
     RECT rc = d->rcItem;
     const int id = static_cast<int>(d->CtlID);
@@ -1125,6 +1187,10 @@ void DrawButton(const DRAWITEMSTRUCT* d) {
     auto oldBrush = SelectObject(d->hDC, GetStockObject(NULL_BRUSH));
     Rectangle(d->hDC, rc.left, rc.top, rc.right, rc.bottom);
     SelectObject(d->hDC, oldBrush); SelectObject(d->hDC, oldPen); DeleteObject(pen);
+    if (IsToolbarGlyph(id)) {
+        DrawToolbarGlyph(d->hDC, rc, id);
+        return;
+    }
     wchar_t text[80]{}; GetWindowTextW(d->hwndItem, text, 80);
     SetBkMode(d->hDC, TRANSPARENT);
     SetTextColor(d->hDC, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : RGB(45,52,59));
