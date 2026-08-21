@@ -76,6 +76,7 @@ std::unordered_set<HWND> g_ignored;
 std::vector<MacroEvent> g_macro;
 HWND g_source{};
 bool g_sync{}, g_recording{}, g_playing{}, g_blockMove{};
+ULONGLONG g_lastMouseMoveBroadcast{};
 std::chrono::steady_clock::time_point g_lastMacro;
 constexpr wchar_t kSettingsKey[] = L"Software\\AutoSyncClean";
 
@@ -253,6 +254,31 @@ HWND InputTarget(HWND topLevel) {
     return topLevel;
 }
 
+bool DeliverInput(HWND topLevel, UINT message, WPARAM wp, LPARAM lp, bool critical) {
+    HWND target = InputTarget(topLevel);
+    if (!target) return false;
+    if (!critical) return PostMessageW(target, message, wp, lp) != FALSE;
+    DWORD_PTR result{};
+    return SendMessageTimeoutW(target, message, wp, lp,
+                               SMTO_ABORTIFHUNG | SMTO_BLOCK, 20, &result) != 0;
+}
+
+void ActivateSourceWindow() {
+    if (!g_source || !IsWindow(g_source)) return;
+    ShowWindowAsync(g_source, SW_RESTORE);
+    SetWindowPos(g_source, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    DWORD appThread = GetCurrentThreadId();
+    DWORD sourceThread = GetWindowThreadProcessId(g_source, nullptr);
+    const bool attached = sourceThread && sourceThread != appThread &&
+                          AttachThreadInput(appThread, sourceThread, TRUE);
+    BringWindowToTop(g_source);
+    SetForegroundWindow(g_source);
+    SetActiveWindow(g_source);
+    if (HWND focus = InputTarget(g_source)) SetFocus(focus);
+    if (attached) AttachThreadInput(appThread, sourceThread, FALSE);
+}
+
 LPARAM ScaledPoint(HWND target, double nx, double ny) {
     RECT r{};
     GetClientRect(target, &r);
@@ -300,9 +326,15 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
         default: break;
     }
     if (msg == WM_MOUSEMOVE && g_blockMove) return;
+    if (msg == WM_MOUSEMOVE) {
+        ULONGLONG now = GetTickCount64();
+        if (now - g_lastMouseMoveBroadcast < 16) return;
+        g_lastMouseMoveBroadcast = now;
+    }
+    const bool critical = msg != WM_MOUSEMOVE;
     ForTargets([&](HWND h) {
         HWND target = InputTarget(h);
-        if (target) PostMessageW(target, msg, wp, ScaledPoint(target, nx, ny));
+        if (target) DeliverInput(h, msg, wp, ScaledPoint(target, nx, ny), critical);
     });
     MacroEvent e{mt, msg, nx, ny, GET_WHEEL_DELTA_WPARAM(wp), 0};
     AddMacro(e);
@@ -327,8 +359,7 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wp, LPARAM lp) {
                 if (k->flags & LLKHF_EXTENDED) keyData |= 1LL << 24;
                 if (msg == WM_KEYUP || msg == WM_SYSKEYUP) keyData |= (1LL << 30) | (1LL << 31);
                 ForTargets([&](HWND h) {
-                    HWND target = InputTarget(h);
-                    if (target) PostMessageW(target, msg, k->vkCode, keyData);
+                    DeliverInput(h, msg, k->vkCode, keyData, true);
                 });
                 AddMacro({(msg == WM_KEYUP || msg == WM_SYSKEYUP) ? MacroType::KeyUp : MacroType::KeyDown,
                           k->vkCode, 0, 0, 0, 0});
@@ -339,6 +370,11 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wp, LPARAM lp) {
 }
 
 void SetSync(bool on) {
+    if (on && (!g_source || !IsWindow(g_source))) {
+        MessageBoxW(g_main, L"Hãy chọn một cửa sổ ONLINE làm Cửa sổ chính trước khi bật đồng bộ.",
+                    kTitle, MB_ICONINFORMATION);
+        return;
+    }
     g_sync = on;
     SetWindowTextW(g_btnSync, on ? L"■ Tắt đồng bộ" : L"⟳ Bật đồng bộ");
     if (on) {
@@ -348,6 +384,9 @@ void SetSync(bool on) {
             MessageBoxW(g_main, L"Không thể cài hook. Hãy thử chạy bằng quyền Administrator nếu cửa sổ đích đang chạy quyền cao.", kTitle, MB_ICONERROR);
             g_sync = false;
             SetWindowTextW(g_btnSync, L"⟳ Bật đồng bộ");
+        } else {
+            g_lastMouseMoveBroadcast = 0;
+            ActivateSourceWindow();
         }
     } else {
         if (g_keyboardHook) UnhookWindowsHookEx(g_keyboardHook);
@@ -355,6 +394,8 @@ void SetSync(bool on) {
         g_keyboardHook = g_mouseHook = nullptr;
     }
     RebuildList();
+    if (g_sync && g_source)
+        SetStatus(L"Đang đồng bộ từ " + WindowTitle(g_source) + L". Cửa sổ chính đã được kích hoạt.");
 }
 
 HWND SelectedHwnd() {
