@@ -34,12 +34,14 @@
 - Khi bấm **Kết thúc**, cột **Giá trị** hiển thị tọa độ pixel rõ ràng theo dạng `X: …, Y: …` của từng click trong cửa sổ đã chọn; sự kiện bàn phím hiển thị mã phím. Hộp nguồn dùng font Unicode và luôn ghi đúng `Cửa sổ 1`, `Cửa sổ 2`…
 - Bàn phím, cuộn chuột và các click tiếp theo vẫn được ghi theo đúng thứ tự/thời gian. Nhập tên rồi bấm **Lưu**; chỉ bản ghi đã lưu mới xuất hiện trong danh sách với đuôi `.json`.
 - Trong cửa sổ quản lí, **Bắt đầu** phát bản ghi đang chọn theo số lần lặp/giãn cách và lập tức đổi thành **Tạm dừng**. Bấm **Tạm dừng** sẽ giữ nguyên vị trí phát và đổi thành **Tiếp tục**; bấm **Kết thúc** dừng hẳn và đưa nút về **Bắt đầu**.
-- Giá trị **Lặp lại** và **Giãn cách** được lưu cho lần mở sau (ví dụ nhập `99999` thì lần sau vẫn hiện `99999`). Checkbox trong danh sách chọn đúng một bản ghi để auto-click; bản ghi vừa lưu được tự động chọn.
+- Giá trị **Lặp lại** từ 1 đến **99.999** và **Giãn cách** được lưu cho lần mở sau (ví dụ nhập `99999` thì lần sau vẫn hiện `99999`). Checkbox trong danh sách chọn đúng một bản ghi để auto-click; bản ghi vừa lưu được tự động chọn.
 - Mở **Quản lí bản ghi** hoặc **Thêm bản ghi** sẽ tự tắt Đồng bộ. Ghi và phát auto-click hoạt động độc lập, không yêu cầu bật Đồng bộ và không phát thao tác trực tiếp trong lúc đang tạo bản ghi.
 - Trước khi phát, chương trình chụp cố định bản ghi và danh sách mọi cửa sổ `ONLINE` đã tích checkbox (bao gồm cửa sổ nguồn nếu được tích), rồi luồng nền chỉ dùng bản chụp đó. Giao diện thay đổi trong lúc phát không còn làm sai thứ tự hoặc bỏ sót cửa sổ.
-- Khi bắt đầu auto-click, chương trình còn khóa cố định control nhận input bên trong từng cửa sổ game. Phát lại chỉ dùng `PostMessage` nền tại tọa độ đã ghi; không dùng con trỏ hệ thống, không gọi `SendInput`, không di chuyển chuột, không kích hoạt và không giành focus của game. Vì vậy người dùng có thể mở Chrome, YouTube, xem phim hoặc làm việc bằng chuột/bàn phím bình thường trong khi game tiếp tục auto-click nền.
+- Ở chế độ nền mặc định, chương trình khóa cố định control nhận input bên trong từng cửa sổ game và dùng `PostMessage` tại tọa độ đã ghi; không di chuyển con trỏ hoặc giành focus của game. Chế độ này phù hợp với ứng dụng chấp nhận thông điệp Win32.
 - Trước mỗi `MOUSE DOWN` và `MOUSE UP`, chương trình gửi thêm `WM_MOUSEMOVE` ảo đến đúng tọa độ bản ghi trong riêng hàng đợi của game. Sự kiện này cập nhật điểm hover nội bộ (ví dụ nút **TRỢ GIÚP**) nhưng không làm xuất hiện hoặc kéo mũi tên chuột Windows về game; người dùng rê chuột thật sang nơi khác không đổi điểm auto-click.
-- Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Phát lại dùng thông điệp nền, không di chuyển hoặc khóa con trỏ thật; người dùng vẫn có thể sử dụng chuột và bàn phím của máy tính bình thường.
+- **Chế độ máy ảo (khóa chuột)** dùng `SendInput` trong Windows khách cho game không nhận `PostMessage`. Chương trình lần lượt kích hoạt từng cửa sổ game đã chọn, khóa con trỏ khách tại tọa độ đã ghi và phát một click nhấn-thả hoàn chỉnh. Nhấn **F8** để tạm dừng/tiếp tục; nhấn **F9** để kết thúc và mở khóa ngay.
+- Chỉ bật chế độ máy ảo khi game và AutoSyncClean cùng chạy trong Windows khách (VirtualBox, VMware hoặc Hyper-V). Khi đó con trỏ của Windows khách bị điều khiển, còn chuột máy chính vẫn độc lập. Nếu bật trực tiếp trên máy chính, chuột máy chính cũng sẽ bị khóa và di chuyển theo bản ghi.
+- Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Khi không bật chế độ máy ảo, phát lại vẫn dùng thông điệp nền và không di chuyển hoặc khóa con trỏ thật.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, luôn khởi tạo ở mức mặc định 30 FPS. Giá trị này điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
@@ -118,4 +120,5 @@ Mỗi lần mở thanh thu nhỏ, danh sách được giữ nguyên thứ tự h
 - Ứng dụng dùng hook bàn phím/chuột cấp thấp và gửi thông điệp Win32 tới cửa sổ đích.
 - Nếu ứng dụng đích chạy bằng quyền Administrator, AutoSync Clean cũng cần chạy cùng mức quyền.
 - Một số game dùng Raw Input, DirectInput độc quyền hoặc cơ chế chống gian lận có thể không nhận thông điệp `PostMessage`. Dự án không can thiệp tiến trình, không tiêm DLL và không vượt cơ chế chống gian lận.
+- Với các game đó, có thể thử **Chế độ máy ảo (khóa chuột)**. Chế độ này dùng API đầu vào Windows tiêu chuẩn trong máy khách, không tiêm mã vào tiến trình game.
 - Các cửa sổ nên có cùng tỉ lệ khung hình để tọa độ chuột tương ứng chính xác nhất.
