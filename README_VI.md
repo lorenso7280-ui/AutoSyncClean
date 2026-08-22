@@ -74,7 +74,7 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 
 ## Sử dụng
 
-Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm tự vẽ bằng màu xanh đậm, không phụ thuộc tùy chọn màu tiêu đề của Windows 10/11. Cửa sổ không dùng `WS_CAPTION`, do đó chỉ có duy nhất một thanh tiêu đề màu xanh. Khi rê chuột lên 7 nút biểu tượng, phần mềm hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
+Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm tự vẽ bằng màu xanh đậm, không phụ thuộc tùy chọn màu tiêu đề của Windows 10/11. Cửa sổ không dùng `WS_CAPTION` hoặc `WS_THICKFRAME`, do đó chỉ có duy nhất một thanh tiêu đề màu xanh và không còn viền trắng ngoài bốn cạnh. Khi giữ con trỏ trên 7 nút biểu tượng khoảng 350 ms, tooltip popup hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
 
 1. Mở các cửa sổ cần điều khiển rồi bấm **Làm mới**.
 2. Đánh dấu các cửa sổ con cần nhận thao tác.
@@ -123,7 +123,6 @@ Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuy�
 ### Thanh cửa sổ thu nhỏ
 
 1. Bấm nút biểu tượng thanh thu nhỏ `▤` ở góc trên bên phải.
-   Khi mở thanh này, toàn bộ cửa sổ game `ONLINE` được thu nhỏ xuống taskbar bằng `SW_MINIMIZE`; tiến trình game vẫn chạy và phần mềm không gửi lệnh đóng/thoát game.
 2. Thanh **Xem cửa sổ thu nhỏ** sẽ mở sát đáy màn hình và tự hiển thị ảnh trực tiếp của mọi cửa sổ Doomsday.
    Thanh dùng một thanh tiêu đề tùy chỉnh cao 22 pixel chạy hết chiều ngang và một đường viền xanh 1 pixel bao quanh toàn bộ cửa sổ. Khung trắng `WS_THICKFRAME` của Windows đã được loại bỏ để chiều cao và màu sắc sát với 360Auto. Nền vùng thumbnail màu tối giống giao diện tham chiếu.
    Thumbnail được xếp theo lưới cố định 10 cửa sổ mỗi hàng, tỷ lệ 16:9 và khe 2 pixel; chiều cao cửa sổ tự ôm vừa số hàng nên không còn khoảng trống lớn phía trên, giữa các hàng hoặc phía dưới.
