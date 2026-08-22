@@ -2019,14 +2019,17 @@ void DrawMainCaption(HWND hwnd, HDC dc) {
     RECT title{34, 0, std::max(34L, client.right - 112), 32};
     SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(255,255,255));
     auto oldFont = SelectObject(dc, g_uiFont);
-    DrawTextW(dc, kTitle, -1, &title, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    DrawTextW(dc, kTitle, -1, &title,
+              DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
     SelectObject(dc, oldFont);
     HPEN whitePen = CreatePen(PS_SOLID, 2, RGB(255,255,255));
     auto oldPen = SelectObject(dc, whitePen);
+    auto oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     MoveToEx(dc, client.right - 96, 16, nullptr); LineTo(dc, client.right - 84, 16);
     Rectangle(dc, client.right - 61, 10, client.right - 47, 23);
     MoveToEx(dc, client.right - 25, 10, nullptr); LineTo(dc, client.right - 11, 23);
     MoveToEx(dc, client.right - 11, 10, nullptr); LineTo(dc, client.right - 25, 23);
+    SelectObject(dc, oldBrush);
     SelectObject(dc, oldPen); DeleteObject(whitePen);
 }
 
@@ -2343,7 +2346,11 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc);
-    HWND hwnd = CreateWindowExW(0, kClassName, kTitle, WS_OVERLAPPEDWINDOW,
+    // Do not combine WS_CAPTION with the client-drawn blue caption; doing so
+    // creates two title bars on Windows 10. Keep resizing/system behavior only.
+    constexpr DWORD mainStyle = WS_POPUP | WS_THICKFRAME | WS_SYSMENU |
+                                WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    HWND hwnd = CreateWindowExW(0, kClassName, kTitle, mainStyle,
                                 CW_USEDEFAULT, CW_USEDEFAULT, 605, 454,
                                 nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
