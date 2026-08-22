@@ -1487,14 +1487,13 @@ struct ArrangeRequest {
     bool keepSize{};
 };
 
-void ArrangeOverlapped(const ArrangeRequest& request) {
-    std::vector<HWND> targets;
-    // Arrangement is a window-management action, not a sync-target action.
-    // Apply it to every online game even when its sync checkbox is cleared.
-    for (auto& item : g_windows) if (IsWindow(item.hwnd)) targets.push_back(item.hwnd);
-    if (targets.empty()) {
-        MessageBoxW(g_main, L"Không có cửa sổ game ONLINE.", kTitle, MB_ICONINFORMATION); return;
-    }
+struct ArrangeJob { ArrangeRequest request; std::vector<HWND> targets; };
+struct ArrangeResult { int succeeded{}, total{}; };
+
+DWORD WINAPI ArrangeThread(void* parameter) {
+    std::unique_ptr<ArrangeJob> job(static_cast<ArrangeJob*>(parameter));
+    const ArrangeRequest& request = job->request;
+    const auto& targets = job->targets;
     struct DesiredWindow { HWND hwnd; int x, y, width, height; };
     std::vector<DesiredWindow> desiredWindows;
     for (size_t i = 0; i < targets.size(); ++i) {
@@ -1520,16 +1519,14 @@ void ArrangeOverlapped(const ArrangeRequest& request) {
         int y = request.y + static_cast<int>(i) * request.offsetY;
         desiredWindows.push_back({target, x, y, outerWidth, outerHeight});
     }
-    auto applyPositions = [&]() {
-        for (const auto& desired : desiredWindows) {
-            SetWindowPos(desired.hwnd, nullptr, desired.x, desired.y, desired.width, desired.height,
-                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
-            MoveWindow(desired.hwnd, desired.x, desired.y, desired.width, desired.height, TRUE);
-        }
-    };
-    applyPositions();
-    Sleep(120);
-    applyPositions();
+    // Queue cross-process moves instead of synchronously repainting every
+    // game from the UI thread. A slow game can no longer freeze this dialog.
+    for (const auto& desired : desiredWindows) {
+        SetWindowPos(desired.hwnd, nullptr, desired.x, desired.y, desired.width, desired.height,
+                     SWP_ASYNCWINDOWPOS | SWP_NOZORDER | SWP_NOOWNERZORDER |
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+    }
+    Sleep(300);
     int succeeded = 0;
     for (const auto& desired : desiredWindows) {
         RECT actual{};
@@ -1540,13 +1537,25 @@ void ArrangeOverlapped(const ArrangeRequest& request) {
             ++succeeded;
         }
     }
-    if (g_source && IsWindow(g_source)) SetWindowPos(g_source, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    SetStatus(L"Đã xếp chồng " + std::to_wstring(succeeded) + L"/" + std::to_wstring(targets.size()) + L" cửa sổ game.");
-    if (succeeded != static_cast<int>(targets.size())) {
-        MessageBoxW(g_main,
-            L"Một số cửa sổ game đã từ chối thay đổi vị trí hoặc kích thước. Hãy đóng bản này, sau đó nhấp phải AutoSyncClean.exe và chọn Run as administrator rồi thử lại.",
-            kTitle, MB_ICONWARNING);
-    }
+    if (g_source && IsWindow(g_source))
+        SetWindowPos(g_source, HWND_TOP, 0, 0, 0, 0,
+                     SWP_ASYNCWINDOWPOS | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    auto* result = new ArrangeResult{succeeded, static_cast<int>(targets.size())};
+    if (!PostMessageW(g_main, WM_APP + 3, reinterpret_cast<WPARAM>(result), 0)) delete result;
+    return 0;
+}
+
+bool StartArrangeOverlapped(const ArrangeRequest& request) {
+    auto job = std::make_unique<ArrangeJob>();
+    job->request = request;
+    for (const auto& item : g_windows) if (IsWindow(item.hwnd)) job->targets.push_back(item.hwnd);
+    if (job->targets.empty()) return false;
+    const size_t count = job->targets.size();
+    HANDLE thread = CreateThread(nullptr, 0, ArrangeThread, job.get(), 0, nullptr);
+    if (!thread) return false;
+    job.release(); CloseHandle(thread);
+    SetStatus(L"Đang sắp xếp " + std::to_wstring(count) + L" cửa sổ...");
+    return true;
 }
 
 LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -1599,7 +1608,12 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 request.offsetX = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_X).c_str()), 0, 2000);
                 request.offsetY = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_Y).c_str()), 0, 2000);
                 request.keepSize = Button_GetCheck(GetDlgItem(hwnd, IDC_ARRANGE_KEEP_SIZE)) == BST_CHECKED;
-                ArrangeOverlapped(request); DestroyWindow(hwnd); return 0;
+                if (!StartArrangeOverlapped(request)) {
+                    MessageBoxW(hwnd, L"Không có cửa sổ game ONLINE hoặc không thể tạo tác vụ sắp xếp.",
+                                kTitle, MB_ICONINFORMATION);
+                    return 0;
+                }
+                DestroyWindow(hwnd); return 0;
             }
             break;
         case WM_DESTROY: g_arranger = nullptr; return 0;
@@ -1846,7 +1860,16 @@ void Layout(HWND hwnd) {
     MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
     int bottom = r.bottom - 28;
-    MoveWindow(g_status, gap, bottom + 3, std::max(60L, r.right - gap * 2), 18, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_SUPPORT), gap, bottom, 128, 23, TRUE);
+    MoveWindow(g_status, 136, bottom + 3, std::max(60L, r.right - 140), 18, TRUE);
+}
+
+void ApplyBlueTitleBar(HWND hwnd) {
+    const COLORREF blue = RGB(43, 139, 226);
+    const COLORREF white = RGB(255, 255, 255);
+    DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue));
+    DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue));
+    DwmSetWindowAttribute(hwnd, 36, &white, sizeof(white));
 }
 
 COLORREF ButtonColor(int id) {
@@ -1968,6 +1991,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             button(IDC_PROXY, L"◉");
             button(IDC_THUMBNAILS, L"▤");
             button(IDC_SETTINGS, L"⚙");
+            button(IDC_SUPPORT, L"Nguyễn Đức Lộc");
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
@@ -1980,8 +2004,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_status = CreateWindowW(L"STATIC", L"Sẵn sàng", WS_CHILD | WS_VISIBLE | SS_RIGHT,
                                     0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_STATUS), g_instance, nullptr);
             SendMessageW(g_status, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
-            const COLORREF caption = RGB(43, 139, 226);
-            DwmSetWindowAttribute(hwnd, 35, &caption, sizeof(caption));
+            ApplyBlueTitleBar(hwnd);
             SetTimer(hwnd, 1, 3000, nullptr);
             RefreshWindows();
             return 0;
@@ -1997,6 +2020,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_SIZE: Layout(hwnd); return 0;
+        case WM_ACTIVATE: ApplyBlueTitleBar(hwnd); return 0;
         case WM_TIMER: RefreshWindows(); return 0;
         case WM_CONTEXTMENU:
             if (reinterpret_cast<HWND>(wp) == g_list) ShowContextMenu({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
@@ -2061,6 +2085,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_APP + 2:
             AcceptPickedWindow(reinterpret_cast<HWND>(wp));
             return 0;
+        case WM_APP + 3: {
+            std::unique_ptr<ArrangeResult> result(reinterpret_cast<ArrangeResult*>(wp));
+            if (!result) return 0;
+            SetStatus(L"Đã xếp chồng " + std::to_wstring(result->succeeded) + L"/" +
+                      std::to_wstring(result->total) + L" cửa sổ game.");
+            if (result->succeeded != result->total)
+                MessageBoxW(hwnd,
+                    L"Một số cửa sổ game đã từ chối thay đổi vị trí hoặc kích thước. Hãy chạy AutoSyncClean bằng quyền Administrator rồi thử lại.",
+                    kTitle, MB_ICONWARNING);
+            return 0;
+        }
         case WM_DESTROY:
             SetSync(false); g_playing = false;
             if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
@@ -2086,7 +2121,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc);
     HWND hwnd = CreateWindowExW(0, kClassName, kTitle, WS_OVERLAPPEDWINDOW,
-                                CW_USEDEFAULT, CW_USEDEFAULT, 610, 255,
+                                CW_USEDEFAULT, CW_USEDEFAULT, 605, 454,
                                 nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
     ShowWindow(hwnd, show);
