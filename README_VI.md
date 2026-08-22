@@ -112,7 +112,7 @@ Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuy�
 
 1. Bấm nút biểu tượng thanh thu nhỏ `▤` ở góc trên bên phải.
 2. Thanh **Xem cửa sổ thu nhỏ** sẽ mở sát đáy màn hình và tự hiển thị ảnh trực tiếp của mọi cửa sổ Doomsday.
-   Thanh có viền và thanh tiêu đề màu xanh, nền vùng thumbnail màu tối giống giao diện tham chiếu.
+   Thanh dùng một thanh tiêu đề tùy chỉnh cao 25 pixel chạy hết chiều ngang và viền xanh bao quanh toàn bộ cửa sổ, tránh hiện hai thanh tiêu đề lệch kích thước trên Windows 10. Nền vùng thumbnail màu tối giống giao diện tham chiếu.
 3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
 4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
 
