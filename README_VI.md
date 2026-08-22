@@ -22,7 +22,8 @@
 - Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
 - Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
 - Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
-- Cửa sổ chính khởi động ở chiều cao gọn, vừa khoảng 6 dòng ID game; người dùng vẫn có thể kéo cạnh để mở rộng.
+- Cửa sổ chính khởi động ở kích thước 605×454 pixel giống khung 360Auto tham chiếu; thanh tiêu đề dùng màu xanh và vẫn có thể kéo cạnh để thay đổi kích thước.
+- Thanh dưới có nhãn tác giả **Nguyễn Đức Lộc** chữ trắng trên nền xanh lá.
 - Thanh xem trước hiển thị tối đa 10 cửa sổ trên mỗi hàng và tự thêm hàng khi có nhiều hơn 10 cửa sổ.
 - Sắp xếp/resize và thanh cửa sổ thu nhỏ luôn áp dụng cho toàn bộ cửa sổ game `ONLINE`, không cần tích checkbox; checkbox chỉ quyết định cửa sổ nhận thao tác đồng bộ.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
@@ -105,7 +106,7 @@ Nút Proxy `◉` giải thích và dẫn người dùng tới phương thức c�
 4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
 5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
 
-Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuyển/đổi kích thước các cửa sổ game đang chạy quyền cao. Sau khi sắp xếp, thanh trạng thái sẽ báo số cửa sổ thực sự áp dụng thành công.
+Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuyển/đổi kích thước các cửa sổ game đang chạy quyền cao. Việc sắp xếp được đưa sang tác vụ nền và dùng lệnh di chuyển bất đồng bộ, nên hộp Sắp xếp đóng ngay và giao diện không bị `Not responding` khi game phản hồi chậm. Sau khi hoàn tất, thanh trạng thái sẽ báo số cửa sổ thực sự áp dụng thành công.
 
 ### Thanh cửa sổ thu nhỏ
 
