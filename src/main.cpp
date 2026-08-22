@@ -323,6 +323,24 @@ HWND InputTarget(HWND topLevel) {
     GUITHREADINFO info{sizeof(info)};
     if (threadId && GetGUIThreadInfo(threadId, &info) && info.hwndFocus &&
         (info.hwndFocus == topLevel || IsChild(topLevel, info.hwndFocus))) return info.hwndFocus;
+
+    // A background window has no focused child. Locate its largest visible
+    // child instead; Chromium/WebView and many launchers receive mouse input
+    // in this render/control HWND rather than in the outer frame.
+    struct Candidate { HWND hwnd{}; long long area{}; } best;
+    EnumChildWindows(topLevel, [](HWND child, LPARAM parameter) -> BOOL {
+        auto* candidate = reinterpret_cast<Candidate*>(parameter);
+        if (!IsWindowVisible(child) || !IsWindowEnabled(child)) return TRUE;
+        RECT rect{};
+        if (!GetClientRect(child, &rect)) return TRUE;
+        const long long area = static_cast<long long>(rect.right - rect.left) *
+                               static_cast<long long>(rect.bottom - rect.top);
+        if (area > candidate->area) *candidate = {child, area};
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&best));
+    RECT outer{}; GetClientRect(topLevel, &outer);
+    const long long outerArea = static_cast<long long>(outer.right) * outer.bottom;
+    if (best.hwnd && best.area >= outerArea / 4) return best.hwnd;
     return topLevel;
 }
 
@@ -1058,7 +1076,10 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_CREATE: {
             g_playRepeat = std::clamp(static_cast<int>(LoadSettingDword(L"RecordRepeat", 1)), 1, 99999);
             g_playGapSeconds = std::clamp(static_cast<int>(LoadSettingDword(L"RecordGapSeconds", 1)), 0, 3600);
-            g_vmPlaybackMode = LoadSettingDword(L"VmPlaybackMode", 0) != 0;
+            // Playback is always background-only. Ignore legacy VM mode from
+            // older builds because it used SendInput and could capture cursor.
+            g_vmPlaybackMode = false;
+            SaveSettingDword(L"VmPlaybackMode", 0);
             const std::wstring repeatText = std::to_wstring(g_playRepeat);
             const std::wstring gapText = std::to_wstring(g_playGapSeconds);
             auto button = [&](int id, const wchar_t* text, int x, int w) {
@@ -1076,12 +1097,10 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", gapText.c_str(), WS_CHILD | WS_VISIBLE | ES_NUMBER,
                 72, 99, 52, 23, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_GAP), g_instance, nullptr);
             CreateWindowW(L"STATIC", L"giây", WS_CHILD | WS_VISIBLE, 129, 102, 35, 22, hwnd, nullptr, g_instance, nullptr);
-            HWND vmMode = CreateWindowW(L"BUTTON", L"Chế độ máy ảo (khóa chuột)",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 8, 135, 155, 22, hwnd,
-                reinterpret_cast<HMENU>(IDC_RECORD_VM_MODE), g_instance, nullptr);
-            SendMessageW(vmMode, BM_SETCHECK, g_vmPlaybackMode ? BST_CHECKED : BST_UNCHECKED, 0);
-            CreateWindowW(L"STATIC", L"F8: Tạm dừng/Tiếp tục\r\nF9: Kết thúc và mở khóa",
-                WS_CHILD | WS_VISIBLE, 8, 162, 155, 42, hwnd, nullptr, g_instance, nullptr);
+            CreateWindowW(L"STATIC", L"✓ Click nền cố định\r\nKhông chiếm con trỏ thật",
+                WS_CHILD | WS_VISIBLE, 8, 135, 155, 42, hwnd, nullptr, g_instance, nullptr);
+            CreateWindowW(L"STATIC", L"F8: Tạm dừng/Tiếp tục\r\nF9: Kết thúc phát lại",
+                WS_CHILD | WS_VISIBLE, 8, 181, 155, 42, hwnd, nullptr, g_instance, nullptr);
             g_recordList = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                 166, 10, 225, 330, hwnd, reinterpret_cast<HMENU>(IDC_RECORD_LIST), g_instance, nullptr);
             g_recordEvents = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT,
@@ -1155,7 +1174,7 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
                 g_playRepeat = std::clamp(readNumber(IDC_RECORD_REPEAT), 1, 99999);
                 g_playGapSeconds = std::clamp(readNumber(IDC_RECORD_GAP), 0, 3600);
-                g_vmPlaybackMode = SendMessageW(GetDlgItem(hwnd, IDC_RECORD_VM_MODE), BM_GETCHECK, 0, 0) == BST_CHECKED;
+                g_vmPlaybackMode = false;
                 SaveSettingDword(L"RecordRepeat", static_cast<DWORD>(g_playRepeat));
                 SaveSettingDword(L"RecordGapSeconds", static_cast<DWORD>(g_playGapSeconds));
                 SaveSettingDword(L"VmPlaybackMode", g_vmPlaybackMode ? 1 : 0);
@@ -1215,8 +1234,8 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 const DWORD gap = static_cast<DWORD>(std::clamp(_wtoi(gapText), 0, 3600));
                 SaveSettingDword(L"RecordRepeat", repeat);
                 SaveSettingDword(L"RecordGapSeconds", gap);
-                g_vmPlaybackMode = SendMessageW(GetDlgItem(hwnd, IDC_RECORD_VM_MODE), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                SaveSettingDword(L"VmPlaybackMode", g_vmPlaybackMode ? 1 : 0);
+                g_vmPlaybackMode = false;
+                SaveSettingDword(L"VmPlaybackMode", 0);
             }
             g_playing = false; g_playPaused = false;
             ClipCursor(nullptr);
