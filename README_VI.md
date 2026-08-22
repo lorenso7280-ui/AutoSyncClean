@@ -1,5 +1,7 @@
 # AutoSync Clean
 
+Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa nhiều kích thước từ 16×16 đến 256×256 để Windows hiển thị rõ ở các mức DPI khác nhau.
+
 Ứng dụng Windows C++ độc lập để đồng bộ thao tác bàn phím và chuột giữa nhiều cửa sổ. Dự án được viết mới dựa trên hành vi quan sát trong video, không chứa hệ thống tài khoản, VIP hoặc key.
 
 ## Chức năng
