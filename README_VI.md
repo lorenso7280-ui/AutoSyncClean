@@ -133,6 +133,8 @@ Khi dùng lệnh thu nhỏ tất cả của Windows, AutoSync Clean vẫn giữ 
 
 Mỗi lần mở thanh thu nhỏ, danh sách được giữ nguyên thứ tự hiện tại và đánh số lại `Cửa sổ 1`, `Cửa sổ 2`… Các cửa sổ `ONLINE` được đổi luôn tiêu đề Windows, vì vậy tên trên thumbnail cũng đúng thứ tự. Dòng `OFFLINE` có thể nhấp phải và chọn **Xóa khỏi danh sách**; sau khi xóa, mở lại thanh thu nhỏ để đánh số liên tục từ đầu.
 
+Lệnh **Xóa tất cả** chỉ làm trống danh sách quản lý và thanh thumbnail, không gửi lệnh đóng và không kết thúc bất kỳ game nào. Sau đó giữ nút **Kéo thả target vào cửa sổ game** và thả vào một game đang chạy: phần mềm xóa danh sách bỏ qua cũ, quét lại theo đúng đường dẫn tiến trình và nhận lại toàn bộ cửa sổ cùng game, kể cả cửa sổ đang minimize/ẩn; thanh thumbnail được dựng lại đầy đủ theo danh sách mới.
+
 ## Giới hạn kỹ thuật
 
 - Ứng dụng dùng hook bàn phím/chuột cấp thấp và gửi thông điệp Win32 tới cửa sổ đích.
