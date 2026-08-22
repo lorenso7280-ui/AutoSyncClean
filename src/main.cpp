@@ -1647,18 +1647,20 @@ void LayoutThumbnails(HWND hwnd) {
     RECT client{}; GetClientRect(hwnd, &client);
     const int count = static_cast<int>(g_thumbnails.size());
     if (!count || client.right <= 0 || client.bottom <= 0) return;
-    constexpr int gap = 4;
+    constexpr int border = 3, titleHeight = 25, gap = 4;
     constexpr int maxColumns = 10;
     const int columns = std::min(maxColumns, count);
     const int rows = (count + maxColumns - 1) / maxColumns;
-    const int cellWidth = std::max(1, (static_cast<int>(client.right) - gap * (columns + 1)) / columns);
-    const int cellHeight = std::max(1, (static_cast<int>(client.bottom) - gap * (rows + 1)) / rows);
+    const int contentWidth = std::max(1, static_cast<int>(client.right) - border * 2);
+    const int contentHeight = std::max(1, static_cast<int>(client.bottom) - titleHeight - border);
+    const int cellWidth = std::max(1, (contentWidth - gap * (columns + 1)) / columns);
+    const int cellHeight = std::max(1, (contentHeight - gap * (rows + 1)) / rows);
     for (int index = 0; index < count; ++index) {
         auto& item = g_thumbnails[static_cast<size_t>(index)];
         const int column = index % maxColumns;
         const int row = index / maxColumns;
-        const int cellLeft = gap + column * (cellWidth + gap);
-        const int cellTop = gap + row * (cellHeight + gap);
+        const int cellLeft = border + gap + column * (cellWidth + gap);
+        const int cellTop = titleHeight + gap + row * (cellHeight + gap);
         SIZE sourceSize{};
         DwmQueryThumbnailSourceSize(item.handle, &sourceSize);
         const int maxWidth = std::max(1, cellWidth);
@@ -1709,9 +1711,6 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     switch (msg) {
         case WM_CREATE: {
             g_thumbnailViewer = hwnd;
-            const COLORREF blue = RGB(43, 139, 226);
-            DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue)); // border
-            DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue)); // caption
             RefreshThumbnailViewer(true);
             return 0;
         }
@@ -1725,6 +1724,47 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             DeleteObject(dark);
             return TRUE;
         }
+        case WM_PAINT: {
+            PAINTSTRUCT paint{};
+            HDC dc = BeginPaint(hwnd, &paint);
+            RECT client{}; GetClientRect(hwnd, &client);
+            const COLORREF blue = RGB(43, 139, 226);
+            HBRUSH blueBrush = CreateSolidBrush(blue);
+            FrameRect(dc, &client, blueBrush);
+            RECT inner{1, 1, client.right - 1, client.bottom - 1};
+            FrameRect(dc, &inner, blueBrush);
+            RECT title{2, 2, client.right - 2, 25};
+            FillRect(dc, &title, blueBrush);
+            DeleteObject(blueBrush);
+            SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(255,255,255));
+            auto oldFont = SelectObject(dc, g_smallFont);
+            RECT titleText{9, 2, client.right - 70, 25};
+            DrawTextW(dc, L"Xem cửa sổ thu nhỏ", -1, &titleText,
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            RECT minimize{client.right - 55, 2, client.right - 30, 25};
+            RECT close{client.right - 29, 2, client.right - 3, 25};
+            DrawTextW(dc, L"−", -1, &minimize, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DrawTextW(dc, L"×", -1, &close, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(dc, oldFont);
+            EndPaint(hwnd, &paint);
+            return 0;
+        }
+        case WM_NCHITTEST: {
+            POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ScreenToClient(hwnd, &point);
+            RECT client{}; GetClientRect(hwnd, &client);
+            constexpr int edge = 6;
+            if (point.y < edge && point.x < edge) return HTTOPLEFT;
+            if (point.y < edge && point.x >= client.right - edge) return HTTOPRIGHT;
+            if (point.y >= client.bottom - edge && point.x < edge) return HTBOTTOMLEFT;
+            if (point.y >= client.bottom - edge && point.x >= client.right - edge) return HTBOTTOMRIGHT;
+            if (point.y < edge) return HTTOP;
+            if (point.y >= client.bottom - edge) return HTBOTTOM;
+            if (point.x < edge) return HTLEFT;
+            if (point.x >= client.right - edge) return HTRIGHT;
+            if (point.y < 25 && point.x < client.right - 60) return HTCAPTION;
+            return HTCLIENT;
+        }
         case WM_LBUTTONDOWN: {
             POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             for (const auto& item : g_thumbnails) {
@@ -1735,6 +1775,17 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
                     SetForegroundWindow(item.source);
                     break;
                 }
+            }
+            return 0;
+        }
+        case WM_LBUTTONUP: {
+            POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            RECT client{}; GetClientRect(hwnd, &client);
+            if (point.y >= 2 && point.y < 25 && point.x >= client.right - 29) {
+                DestroyWindow(hwnd); return 0;
+            }
+            if (point.y >= 2 && point.y < 25 && point.x >= client.right - 55) {
+                ShowWindow(hwnd, SW_MINIMIZE); return 0;
             }
             return 0;
         }
@@ -1771,7 +1822,7 @@ void ToggleThumbnailViewer() {
     const int workHeight = static_cast<int>(work.bottom - work.top);
     const int height = std::min(workHeight, 35 + rows * 125);
     HWND viewer = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.ThumbnailViewer", L"Xem cửa sổ thu nhỏ",
-                                  WS_OVERLAPPEDWINDOW, work.left, std::max(work.top, work.bottom - height),
+                                  WS_POPUP | WS_THICKFRAME, work.left, std::max(work.top, work.bottom - height),
                                   work.right - work.left, height, nullptr, nullptr, g_instance, nullptr);
     if (viewer) {
         ShowWindow(viewer, SW_SHOW);
