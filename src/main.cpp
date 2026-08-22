@@ -1472,7 +1472,7 @@ void ShowLauncher() {
     if (!registered) {
         WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = LauncherProc; wc.hInstance = g_instance;
         wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = L"AutoSyncClean.Launcher"; wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        wc.lpszClassName = L"AutoSyncClean.Launcher"; wc.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP));
         RegisterClassExW(&wc); registered = true;
     }
     RECT owner{}; GetWindowRect(g_main, &owner);
@@ -1627,7 +1627,7 @@ void ShowArranger() {
     if (!registered) {
         WNDCLASSEXW wc{sizeof(wc)}; wc.lpfnWndProc = ArrangerProc; wc.hInstance = g_instance;
         wc.hCursor = LoadCursorW(nullptr, IDC_ARROW); wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = L"AutoSyncClean.Arranger"; wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        wc.lpszClassName = L"AutoSyncClean.Arranger"; wc.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP));
         RegisterClassExW(&wc); registered = true;
     }
     RECT owner{}; GetWindowRect(g_main, &owner);
@@ -1797,7 +1797,7 @@ void ToggleThumbnailViewer() {
         wc.hInstance = g_instance;
         wc.hCursor = LoadCursorW(nullptr, IDC_HAND);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        wc.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP));
         wc.lpszClassName = L"AutoSyncClean.ThumbnailViewer";
         RegisterClassExW(&wc);
         registered = true;
@@ -2157,7 +2157,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     WNDCLASSEXW wc{sizeof(wc)};
     wc.lpfnWndProc = WndProc;
     wc.hInstance = instance;
-    wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP));
     wc.hIconSm = wc.hIcon;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
