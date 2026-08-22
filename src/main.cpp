@@ -84,7 +84,7 @@ struct NamedRecording {
 };
 
 HINSTANCE g_instance{};
-HWND g_main{}, g_list{}, g_btnSync{}, g_status{};
+HWND g_main{}, g_list{}, g_btnSync{}, g_status{}, g_tooltip{};
 HWND g_launcher{};
 HWND g_arranger{};
 HWND g_thumbnailViewer{};
@@ -1980,8 +1980,19 @@ void Layout(HWND hwnd) {
     MoveWindow(g_status, 136, bottom + 3, std::max(60L, r.right - 140), 18, TRUE);
 }
 
+void AddToolbarTooltip(HWND control, const wchar_t* text) {
+    if (!g_tooltip || !control || !text) return;
+    TOOLINFOW tool{sizeof(tool)};
+    tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    tool.hwnd = g_main;
+    tool.uId = reinterpret_cast<UINT_PTR>(control);
+    tool.lpszText = const_cast<wchar_t*>(text);
+    SendMessageW(g_tooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+}
+
 void ApplyBlueTitleBar(HWND hwnd) {
-    const COLORREF blue = RGB(43, 139, 226);
+    // Match the solid royal-blue caption/border in the supplied UI mock-up.
+    const COLORREF blue = RGB(49, 68, 181);
     const COLORREF white = RGB(255, 255, 255);
     DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue));
     DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue));
@@ -2100,14 +2111,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             };
             HWND picker = button(IDC_REFRESH, L"◎");
             SetWindowSubclass(picker, WindowPickerProc, 1, 0);
-            button(IDC_SET_MAIN, L"▣");
+            HWND launcher = button(IDC_SET_MAIN, L"▣");
             g_btnSync = button(IDC_SYNC, L"⟳  Bật đồng bộ");
-            button(IDC_RECORD, L"Ⓡ");
-            button(IDC_TILE, L"▦");
-            button(IDC_PROXY, L"◉");
-            button(IDC_THUMBNAILS, L"▤");
-            button(IDC_SETTINGS, L"⚙");
+            HWND records = button(IDC_RECORD, L"Ⓡ");
+            HWND arrange = button(IDC_TILE, L"▦");
+            HWND proxy = button(IDC_PROXY, L"◉");
+            HWND thumbnails = button(IDC_THUMBNAILS, L"▤");
+            HWND settings = button(IDC_SETTINGS, L"⚙");
             button(IDC_SUPPORT, L"Nguyễn Đức Lộc");
+            g_tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
+                WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                hwnd, nullptr, g_instance, nullptr);
+            SetWindowPos(g_tooltip, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SendMessageW(g_tooltip, TTM_SETMAXTIPWIDTH, 0, 260);
+            SendMessageW(g_tooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 350);
+            AddToolbarTooltip(picker, L"Kéo thả target vào cửa sổ game");
+            AddToolbarTooltip(launcher, L"Mở cửa sổ");
+            AddToolbarTooltip(records, L"Quản lí bản ghi");
+            AddToolbarTooltip(arrange, L"Sắp xếp cửa sổ");
+            AddToolbarTooltip(proxy, L"Proxy");
+            AddToolbarTooltip(thumbnails, L"Xem cửa sổ thu nhỏ");
+            AddToolbarTooltip(settings, L"Thiết lập");
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
@@ -2215,6 +2241,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             SetSync(false); g_playing = false;
             if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
+            g_tooltip = nullptr;
             if (g_uiFont) DeleteObject(g_uiFont);
             if (g_smallFont) DeleteObject(g_smallFont);
             PostQuitMessage(0); return 0;
