@@ -113,6 +113,7 @@ Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuy�
 1. Bấm nút biểu tượng thanh thu nhỏ `▤` ở góc trên bên phải.
 2. Thanh **Xem cửa sổ thu nhỏ** sẽ mở sát đáy màn hình và tự hiển thị ảnh trực tiếp của mọi cửa sổ Doomsday.
    Thanh dùng một thanh tiêu đề tùy chỉnh cao 22 pixel chạy hết chiều ngang và một đường viền xanh 1 pixel bao quanh toàn bộ cửa sổ. Khung trắng `WS_THICKFRAME` của Windows đã được loại bỏ để chiều cao và màu sắc sát với 360Auto. Nền vùng thumbnail màu tối giống giao diện tham chiếu.
+   Thumbnail được xếp theo lưới cố định 10 cửa sổ mỗi hàng, tỷ lệ 16:9 và khe 2 pixel; chiều cao cửa sổ tự ôm vừa số hàng nên không còn khoảng trống lớn phía trên, giữa các hàng hoặc phía dưới.
 3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
 4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
 
