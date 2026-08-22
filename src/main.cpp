@@ -1863,6 +1863,13 @@ void ToggleThumbnailViewer() {
         return;
     }
     RenameWindowsSequentially();
+    // The thumbnail command is a "minimize all" action, not a close action.
+    // Keep every game process alive and only send it to the taskbar.
+    int minimized = 0;
+    for (const auto& window : g_windows) {
+        if (!IsWindow(window.hwnd)) continue;
+        if (ShowWindowAsync(window.hwnd, SW_MINIMIZE)) ++minimized;
+    }
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{sizeof(wc)};
@@ -1892,6 +1899,7 @@ void ToggleThumbnailViewer() {
     if (viewer) {
         ShowWindow(viewer, SW_SHOW);
         UpdateWindow(viewer);
+        SetStatus(L"Đã thu nhỏ " + std::to_wstring(minimized) + L" cửa sổ game; game vẫn đang chạy.");
     }
 }
 
@@ -1964,7 +1972,7 @@ void AcceptPickedWindow(HWND target) {
 
 void Layout(HWND hwnd) {
     RECT r{}; GetClientRect(hwnd, &r);
-    constexpr int gap = 4, top = 4, buttonH = 27;
+    constexpr int gap = 4, captionH = 32, top = captionH + 4, buttonH = 27;
     MoveWindow(GetDlgItem(hwnd, IDC_REFRESH), gap, top, 28, buttonH, TRUE);
     MoveWindow(GetDlgItem(hwnd, IDC_SET_MAIN), 35, top, 28, buttonH, TRUE);
     MoveWindow(g_btnSync, 67, top, 104, buttonH, TRUE);
@@ -1974,7 +1982,8 @@ void Layout(HWND hwnd) {
     MoveWindow(GetDlgItem(hwnd, IDC_PROXY), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE);
-    MoveWindow(g_list, gap, 35, std::max(100L, r.right - gap * 2), std::max(80L, r.bottom - 67), TRUE);
+    MoveWindow(g_list, gap, captionH + 35, std::max(100L, r.right - gap * 2),
+               std::max(80L, r.bottom - captionH - 67), TRUE);
     int bottom = r.bottom - 28;
     MoveWindow(GetDlgItem(hwnd, IDC_SUPPORT), gap, bottom, 128, 23, TRUE);
     MoveWindow(g_status, 136, bottom + 3, std::max(60L, r.right - 140), 18, TRUE);
@@ -1997,6 +2006,61 @@ void ApplyBlueTitleBar(HWND hwnd) {
     DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue));
     DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue));
     DwmSetWindowAttribute(hwnd, 36, &white, sizeof(white));
+}
+
+void DrawMainCaption(HWND hwnd, HDC dc) {
+    RECT client{}; GetClientRect(hwnd, &client);
+    RECT caption{0, 0, client.right, 32};
+    HBRUSH blue = CreateSolidBrush(RGB(49, 68, 181));
+    FillRect(dc, &caption, blue);
+    DeleteObject(blue);
+    HICON icon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP));
+    if (icon) DrawIconEx(dc, 7, 6, icon, 20, 20, 0, nullptr, DI_NORMAL);
+    RECT title{34, 0, std::max(34L, client.right - 112), 32};
+    SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(255,255,255));
+    auto oldFont = SelectObject(dc, g_uiFont);
+    DrawTextW(dc, kTitle, -1, &title, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(dc, oldFont);
+    HPEN whitePen = CreatePen(PS_SOLID, 2, RGB(255,255,255));
+    auto oldPen = SelectObject(dc, whitePen);
+    MoveToEx(dc, client.right - 96, 16, nullptr); LineTo(dc, client.right - 84, 16);
+    Rectangle(dc, client.right - 61, 10, client.right - 47, 23);
+    MoveToEx(dc, client.right - 25, 10, nullptr); LineTo(dc, client.right - 11, 23);
+    MoveToEx(dc, client.right - 11, 10, nullptr); LineTo(dc, client.right - 25, 23);
+    SelectObject(dc, oldPen); DeleteObject(whitePen);
+}
+
+LRESULT MainHitTest(HWND hwnd, LPARAM lp) {
+    POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+    ScreenToClient(hwnd, &p);
+    RECT r{}; GetClientRect(hwnd, &r);
+    constexpr int edge = 6;
+    const bool left = p.x < edge, right = p.x >= r.right - edge;
+    const bool top = p.y < edge, bottom = p.y >= r.bottom - edge;
+    if (top && left) return HTTOPLEFT;
+    if (top && right) return HTTOPRIGHT;
+    if (bottom && left) return HTBOTTOMLEFT;
+    if (bottom && right) return HTBOTTOMRIGHT;
+    if (left) return HTLEFT; if (right) return HTRIGHT;
+    if (top) return HTTOP; if (bottom) return HTBOTTOM;
+    if (p.y < 32 && p.x < r.right - 108) return HTCAPTION;
+    return HTCLIENT;
+}
+
+bool HandleCaptionButton(HWND hwnd, LPARAM lp) {
+    POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+    RECT r{}; GetClientRect(hwnd, &r);
+    if (p.y < 0 || p.y >= 32) return false;
+    if (p.x >= r.right - 108 && p.x < r.right - 72) {
+        ShowWindow(hwnd, SW_MINIMIZE); return true;
+    }
+    if (p.x >= r.right - 72 && p.x < r.right - 36) {
+        ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE); return true;
+    }
+    if (p.x >= r.right - 36) {
+        PostMessageW(hwnd, WM_CLOSE, 0, 0); return true;
+    }
+    return false;
 }
 
 COLORREF ButtonColor(int id) {
@@ -2095,6 +2159,21 @@ void DrawButton(const DRAWITEMSTRUCT* d) {
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+        case WM_NCCALCSIZE:
+            if (wp) return 0;
+            break;
+        case WM_NCHITTEST:
+            return MainHitTest(hwnd, lp);
+        case WM_PAINT: {
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd, &ps);
+            DrawMainCaption(hwnd, dc);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_LBUTTONUP:
+            if (HandleCaptionButton(hwnd, lp)) return 0;
+            break;
         case WM_CREATE: {
             g_main = hwnd;
             g_uiFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, VIETNAMESE_CHARSET,
@@ -2161,7 +2240,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             info->ptMinTrackSize = {560, 255};
             return 0;
         }
-        case WM_SIZE: Layout(hwnd); return 0;
+        case WM_SIZE: Layout(hwnd); InvalidateRect(hwnd, nullptr, FALSE); return 0;
         case WM_ACTIVATE: ApplyBlueTitleBar(hwnd); return 0;
         case WM_TIMER: RefreshWindows(); return 0;
         case WM_CONTEXTMENU:
@@ -2252,7 +2331,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_instance = instance;
-    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
+    INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
+                                         ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
     WNDCLASSEXW wc{sizeof(wc)};
     wc.lpfnWndProc = WndProc;
