@@ -404,6 +404,24 @@ HWND PointInputTarget(HWND fallback, double nx, double ny) {
     return current;
 }
 
+bool UnitySend(HWND target, UINT message, WPARAM wp, LPARAM lp) {
+    if (!IsWindow(target)) return false;
+    DWORD_PTR result{};
+    return SendMessageTimeoutW(target, message, wp, lp,
+        SMTO_ABORTIFHUNG | SMTO_BLOCK, 40, &result) != 0;
+}
+
+void PrimeUnityBackgroundTarget(HWND target, LPARAM point, UINT buttonMessage) {
+    // Do not call SetCapture, SetActiveWindow, SetForegroundWindow or
+    // SetCursorPos: all of them would interfere with the user's real cursor.
+    // These sent messages only update the target thread's Unity/Win32 state.
+    UnitySend(target, WM_ACTIVATEAPP, TRUE, 0);
+    UnitySend(target, WM_ACTIVATE, WA_ACTIVE, 0);
+    UnitySend(target, WM_SETCURSOR, reinterpret_cast<WPARAM>(target),
+              MAKELPARAM(HTCLIENT, buttonMessage));
+    UnitySend(target, WM_MOUSEMOVE, 0, point);
+}
+
 void ForTargets(const auto& fn) {
     SyncChecksFromList();
     for (auto& w : g_windows) {
@@ -729,13 +747,13 @@ DWORD WINAPI PlayThread(void* parameter) {
                 switch (e.type) {
                     case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
                     case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
-                    case MacroType::MouseMove: PostMessageW(target, WM_MOUSEMOVE, 0, ScaledPoint(target, e.nx, e.ny)); break;
+                    case MacroType::MouseMove:
+                        UnitySend(target, WM_MOUSEMOVE, 0, ScaledPoint(target, e.nx, e.ny));
+                        break;
                     case MacroType::MouseDown: {
                         const LPARAM point = ScaledPoint(target, e.nx, e.ny);
-                        // Prime the game's internal hover position without
-                        // moving or showing the real Windows cursor.
-                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
-                        PostMessageW(target, e.data,
+                        PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
+                        UnitySend(target, static_cast<UINT>(e.data),
                             e.data == WM_LBUTTONDOWN ? MK_LBUTTON :
                             e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON,
                             point);
@@ -743,8 +761,8 @@ DWORD WINAPI PlayThread(void* parameter) {
                     }
                     case MacroType::MouseUp: {
                         const LPARAM point = ScaledPoint(target, e.nx, e.ny);
-                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
-                        PostMessageW(target, e.data, 0, point);
+                        PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
+                        UnitySend(target, static_cast<UINT>(e.data), 0, point);
                         break;
                     }
                     case MacroType::MouseClick: {
@@ -753,14 +771,16 @@ DWORD WINAPI PlayThread(void* parameter) {
                         const WPARAM button = e.data == WM_LBUTTONDOWN ? MK_LBUTTON
                                              : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON;
                         const LPARAM point = ScaledPoint(target, e.nx, e.ny);
-                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
-                        PostMessageW(target, e.data, button, point);
+                        PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
+                        UnitySend(target, static_cast<UINT>(e.data), button, point);
                         Sleep(40);
-                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
-                        PostMessageW(target, upMessage, 0, point);
+                        UnitySend(target, WM_MOUSEMOVE, 0, point);
+                        UnitySend(target, upMessage, 0, point);
                         break;
                     }
-                    case MacroType::Wheel: PostMessageW(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(target, e.nx, e.ny)); break;
+                    case MacroType::Wheel:
+                        UnitySend(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(target, e.nx, e.ny));
+                        break;
                 }
             }
         }
