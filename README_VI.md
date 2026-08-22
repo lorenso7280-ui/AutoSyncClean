@@ -74,7 +74,7 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 
 ## Sử dụng
 
-Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm tự vẽ bằng màu xanh đậm, không phụ thuộc tùy chọn màu tiêu đề của Windows 10/11. Khi rê chuột lên 7 nút biểu tượng, phần mềm hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
+Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm tự vẽ bằng màu xanh đậm, không phụ thuộc tùy chọn màu tiêu đề của Windows 10/11. Cửa sổ không dùng `WS_CAPTION`, do đó chỉ có duy nhất một thanh tiêu đề màu xanh. Khi rê chuột lên 7 nút biểu tượng, phần mềm hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
 
 1. Mở các cửa sổ cần điều khiển rồi bấm **Làm mới**.
 2. Đánh dấu các cửa sổ con cần nhận thao tác.
