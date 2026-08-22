@@ -380,6 +380,30 @@ LPARAM ScaledPoint(HWND target, double nx, double ny) {
     return MAKELPARAM(x, y);
 }
 
+HWND PointInputTarget(HWND fallback, double nx, double ny) {
+    if (!IsWindow(fallback)) return nullptr;
+    RECT client{};
+    if (!GetClientRect(fallback, &client) || client.right <= 0 || client.bottom <= 0) return fallback;
+    POINT screen{
+        std::clamp(static_cast<int>(nx * client.right), 0, std::max(0, static_cast<int>(client.right) - 1)),
+        std::clamp(static_cast<int>(ny * client.bottom), 0, std::max(0, static_cast<int>(client.bottom) - 1))
+    };
+    ClientToScreen(fallback, &screen);
+    HWND current = fallback;
+    // Resolve the deepest visible/enabled child located under the recorded
+    // point. Background game instances often use a different render HWND even
+    // though their outer frames have identical titles and sizes.
+    for (int depth = 0; depth < 12; ++depth) {
+        POINT local = screen;
+        ScreenToClient(current, &local);
+        HWND child = ChildWindowFromPointEx(current, local,
+            CWP_SKIPINVISIBLE | CWP_SKIPDISABLED | CWP_SKIPTRANSPARENT);
+        if (!child || child == current) break;
+        current = child;
+    }
+    return current;
+}
+
 void ForTargets(const auto& fn) {
     SyncChecksFromList();
     for (auto& w : g_windows) {
@@ -680,6 +704,7 @@ void PlayVmEvent(const PlaybackJob::Target& destination, const MacroEvent& event
 
 DWORD WINAPI PlayThread(void* parameter) {
     std::unique_ptr<PlaybackJob> job(static_cast<PlaybackJob*>(parameter));
+    const size_t targetCount = job->targets.size();
     const int repeat = std::clamp(job->repeat, 1, 99999);
     for (int pass = 0; pass < repeat && g_playing; ++pass) {
         for (const auto& e : job->events) {
@@ -695,6 +720,12 @@ DWORD WINAPI PlayThread(void* parameter) {
                 // SetCursorPos or focus activation while background auto-click runs.
                 if (!IsWindow(destination.topLevel) || !IsWindow(destination.input)) continue;
                 HWND target = destination.input;
+                if (e.type == MacroType::MouseMove || e.type == MacroType::MouseDown ||
+                    e.type == MacroType::MouseUp || e.type == MacroType::MouseClick ||
+                    e.type == MacroType::Wheel) {
+                    if (HWND pointTarget = PointInputTarget(destination.input, e.nx, e.ny))
+                        target = pointTarget;
+                }
                 switch (e.type) {
                     case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
                     case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
@@ -740,7 +771,7 @@ DWORD WINAPI PlayThread(void* parameter) {
     g_playing = false;
     g_playPaused = false;
     if (g_recordManager) PostMessageW(g_recordManager, WM_APP + 20, 0, 0);
-    SetStatus(L"Đã phát xong chuỗi thao tác.");
+    SetStatus(L"Đã phát xong đến " + std::to_wstring(targetCount) + L" cửa sổ được chọn.");
     return 0;
 }
 
@@ -1194,8 +1225,10 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     MessageBoxW(hwnd, L"Không có cửa sổ ONLINE nào được chọn để phát bản ghi.", L"Quản lí bản ghi", MB_ICONINFORMATION);
                     return 0;
                 }
+                const size_t playbackTargets = job->targets.size();
                 g_playPaused = false;
                 g_playing = true;
+                SetStatus(L"Đang phát nền đến " + std::to_wstring(playbackTargets) + L" cửa sổ được tích...");
                 SetWindowTextW(g_recordStartButton, L"Tạm dừng");
                 HANDLE thread = CreateThread(nullptr, 0, PlayThread, job.get(), 0, nullptr);
                 if (thread) { job.release(); CloseHandle(thread); }
