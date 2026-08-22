@@ -284,7 +284,11 @@ void RefreshWindows(bool clearIgnored = false) {
     if (g_list) SyncChecksFromList();
     if (clearIgnored) g_ignored.clear();
     for (auto& window : g_windows) {
-        if (!IsWindow(window.hwnd) || !IsCandidate(window.hwnd)) {
+        // A minimized Unity window can temporarily lose WS_VISIBLE. That does
+        // not mean the game is offline. Preserve every tracked HWND for as
+        // long as Windows still reports that the window exists; this also
+        // keeps its registered DWM thumbnail alive while it is minimized.
+        if (!IsWindow(window.hwnd)) {
             if (window.hwnd == g_source) g_source = nullptr;
             window.hwnd = nullptr;
         }
