@@ -15,6 +15,12 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Restore application icon
+        shell: pwsh
+        run: |
+          $icon = [Convert]::FromBase64String((Get-Content src/app.ico.b64 -Raw).Trim())
+          [IO.File]::WriteAllBytes((Join-Path $PWD 'src/app.ico'), $icon)
+
       - name: Configure x64 Release
         run: cmake -S . -B build -A x64
 
