@@ -6,6 +6,8 @@ Chế độ phát bản ghi mặc định dùng click nền theo `HWND`: gửi `
 
 Chỉ các dòng đang được tích checkbox mới nhận thao tác phát lại. Trước mỗi sự kiện chuột, phần mềm dò từ vùng input đã nhận xuống control con sâu nhất nằm đúng dưới tọa độ ghi; cách này xử lý trường hợp các phiên game nền có `HWND` render khác nhau. Thanh trạng thái hiển thị số cửa sổ thực sự được đưa vào danh sách phát.
 
+Với Unity, bản phát nền dùng chuỗi `WM_ACTIVATEAPP` → `WM_ACTIVATE` → `WM_SETCURSOR` → `WM_MOUSEMOVE` → thông điệp nhấn/thả, được gửi bằng `SendMessageTimeout` với giới hạn 40 ms để cửa sổ lỗi không làm treo AutoSyncClean. Tọa độ vẫn nằm trong `lParam`; chương trình tuyệt đối không gọi `SetCapture`, `SetActiveWindow` hoặc `SetCursorPos`, nên không chủ động chiếm con trỏ thật.
+
 Ứng dụng Windows C++ độc lập để đồng bộ thao tác bàn phím và chuột giữa nhiều cửa sổ. Dự án được viết mới dựa trên hành vi quan sát trong video, không chứa hệ thống tài khoản, VIP hoặc key.
 
 ## Chức năng
