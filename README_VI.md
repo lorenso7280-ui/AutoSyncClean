@@ -4,6 +4,8 @@
 
 Chế độ phát bản ghi mặc định dùng click nền theo `HWND`: gửi `WM_MOUSEMOVE`, `WM_LBUTTONDOWN` và `WM_LBUTTONUP` bằng `PostMessage` đến vùng render/control của từng cửa sổ đã chọn. Phần mềm không gọi `SetCursorPos`, `mouse_event` hay `SendInput` trong chế độ này, vì vậy con trỏ thật vẫn dùng độc lập cho trình duyệt và công việc khác. Tùy chọn máy ảo/khóa chuột của các bản cũ đã được loại bỏ.
 
+Chỉ các dòng đang được tích checkbox mới nhận thao tác phát lại. Trước mỗi sự kiện chuột, phần mềm dò từ vùng input đã nhận xuống control con sâu nhất nằm đúng dưới tọa độ ghi; cách này xử lý trường hợp các phiên game nền có `HWND` render khác nhau. Thanh trạng thái hiển thị số cửa sổ thực sự được đưa vào danh sách phát.
+
 Ứng dụng Windows C++ độc lập để đồng bộ thao tác bàn phím và chuột giữa nhiều cửa sổ. Dự án được viết mới dựa trên hành vi quan sát trong video, không chứa hệ thống tài khoản, VIP hoặc key.
 
 ## Chức năng
