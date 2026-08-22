@@ -1,0 +1,44 @@
+name: Build Windows x64
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Restore application icon
+        shell: pwsh
+        run: |
+          $icon = [Convert]::FromBase64String((Get-Content src/app.ico.b64 -Raw).Trim())
+          [IO.File]::WriteAllBytes((Join-Path $PWD 'src/app.ico'), $icon)
+
+      - name: Configure x64 Release
+        run: cmake -S . -B build -A x64
+
+      - name: Build x64 Release
+        run: cmake --build build --config Release --parallel
+
+      - name: Prepare package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item build/Release/AutoSyncClean.exe package/
+          Copy-Item README_VI.md package/
+          Compress-Archive -Path package/* -DestinationPath AutoSyncClean_Windows_x64.zip
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoSyncClean-Windows-x64
+          path: AutoSyncClean_Windows_x64.zip
+          if-no-files-found: error
+          retention-days: 30
