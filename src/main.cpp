@@ -1301,9 +1301,10 @@ LRESULT CALLBACK RecordManagerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void ShowRecordManager() {
-    // Auto-click recording/playback is independent and must not require or
-    // accidentally leave live keyboard/mouse synchronization enabled.
-    if (g_sync) SetSync(false);
+    // Merely opening the manager must not change live synchronization. The
+    // user can keep this window visible and continue broadcasting physical
+    // clicks from the main game to every checked target. Only the separate
+    // "Thêm bản ghi" editor temporarily disables live sync while recording.
     if (g_recordManager) { ShowWindow(g_recordManager, SW_RESTORE); SetForegroundWindow(g_recordManager); return; }
     static bool registered = false;
     if (!registered) {
