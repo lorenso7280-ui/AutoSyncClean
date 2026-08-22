@@ -163,24 +163,28 @@ std::wstring WindowTitle(HWND hwnd) {
 }
 
 bool IsCandidate(HWND hwnd) {
-    if (!IsWindow(hwnd) || !IsWindowVisible(hwnd) || hwnd == g_main) return false;
+    if (!IsWindow(hwnd) || hwnd == g_main) return false;
     if (GetWindow(hwnd, GW_OWNER) != nullptr) return false;
     LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     if (ex & WS_EX_TOOLWINDOW) return false;
+    const bool tracked = std::any_of(g_windows.begin(), g_windows.end(), [hwnd](const auto& window) {
+        return window.hwnd == hwnd;
+    });
+    bool sameProcessGroup = false;
+    if (!g_trackedExePath.empty()) {
+        std::wstring path = ExecutablePath(hwnd);
+        std::transform(path.begin(), path.end(), path.begin(), towlower);
+        sameProcessGroup = path == g_trackedExePath;
+    }
+    // Minimized/hidden game windows from the selected executable are still
+    // valid members of the group and must be recovered after "Xóa tất cả".
+    if (tracked || sameProcessGroup) return true;
+    if (!IsWindowVisible(hwnd)) return false;
     RECT r{};
     if (!GetWindowRect(hwnd, &r) || r.right - r.left < 120 || r.bottom - r.top < 80) return false;
     std::wstring title = WindowTitle(hwnd);
     std::transform(title.begin(), title.end(), title.begin(), towlower);
-    const bool tracked = std::any_of(g_windows.begin(), g_windows.end(), [hwnd](const auto& window) {
-        return window.hwnd == hwnd;
-    });
-    if (tracked || title.find(L"doomsday") != std::wstring::npos) return true;
-    if (!g_trackedExePath.empty()) {
-        std::wstring path = ExecutablePath(hwnd);
-        std::transform(path.begin(), path.end(), path.begin(), towlower);
-        if (path == g_trackedExePath) return true;
-    }
-    return false;
+    return title.find(L"doomsday") != std::wstring::npos;
 }
 
 std::wstring HexHandle(HWND hwnd) {
@@ -1420,8 +1424,14 @@ void HandleMenu(int id) {
             break;
         }
         case IDM_REMOVE_ALL:
+            if (g_sync) SetSync(false);
             for (auto& w : g_windows) if (w.hwnd) g_ignored.insert(w.hwnd);
-            g_windows.clear(); RebuildList(); break;
+            g_windows.clear();
+            g_source = nullptr;
+            RebuildList();
+            RefreshThumbnailViewer(true);
+            SetStatus(L"Đã xóa danh sách. Các cửa sổ game vẫn đang chạy.");
+            break;
     }
 }
 
@@ -1948,6 +1958,9 @@ void AcceptPickedWindow(HWND target) {
         g_source = nullptr;
     }
     g_trackedExePath = exePath;
+    // Dragging a target starts a fresh discovery pass. Re-enable every window
+    // previously hidden by "Xóa tất cả", not only the one under the cursor.
+    g_ignored.clear();
     const std::wstring title = WindowTitle(target);
     auto item = std::find_if(g_windows.begin(), g_windows.end(), [target](const auto& window) {
         return window.hwnd == target;
