@@ -74,6 +74,8 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 
 ## Sử dụng
 
+Thanh tiêu đề và viền trên của cửa sổ chính dùng màu xanh đậm theo giao diện AutoSync Clean. Khi rê chuột lên 7 nút biểu tượng, phần mềm hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
+
 1. Mở các cửa sổ cần điều khiển rồi bấm **Làm mới**.
 2. Đánh dấu các cửa sổ con cần nhận thao tác.
 3. Chọn cửa sổ nguồn và bấm **Cửa sổ chính**.
