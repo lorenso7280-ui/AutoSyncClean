@@ -129,6 +129,8 @@ Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuy�
 3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
 4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
 
+Khi dùng lệnh thu nhỏ tất cả của Windows, AutoSync Clean vẫn giữ các HWND còn tồn tại ở trạng thái `ONLINE` và không đăng ký lại/xóa các DWM thumbnail. Vì vậy thanh **Xem cửa sổ thu nhỏ** vẫn giữ các ô game. Bấm **Sắp xếp cửa sổ** rồi **Xác nhận** sẽ khôi phục toàn bộ cửa sổ game trước khi áp dụng kích thước và tọa độ đã chọn.
+
 Mỗi lần mở thanh thu nhỏ, danh sách được giữ nguyên thứ tự hiện tại và đánh số lại `Cửa sổ 1`, `Cửa sổ 2`… Các cửa sổ `ONLINE` được đổi luôn tiêu đề Windows, vì vậy tên trên thumbnail cũng đúng thứ tự. Dòng `OFFLINE` có thể nhấp phải và chọn **Xóa khỏi danh sách**; sau khi xóa, mở lại thanh thu nhỏ để đánh số liên tục từ đầu.
 
 ## Giới hạn kỹ thuật
