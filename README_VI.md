@@ -8,6 +8,8 @@ Chỉ các dòng đang được tích checkbox mới nhận thao tác phát lạ
 
 Với Unity, bản phát nền dùng chuỗi `WM_ACTIVATEAPP` → `WM_ACTIVATE` → `WM_SETCURSOR` → `WM_MOUSEMOVE` → thông điệp nhấn/thả, được gửi bằng `SendMessageTimeout` với giới hạn 40 ms để cửa sổ lỗi không làm treo AutoSyncClean. Tọa độ vẫn nằm trong `lParam`; chương trình tuyệt đối không gọi `SetCapture`, `SetActiveWindow` hoặc `SetCursorPos`, nên không chủ động chiếm con trỏ thật.
 
+Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt chế độ đồng bộ trực tiếp. Khi nút chính hiển thị **Tắt đồng bộ**, thao tác vật lý trong cửa sổ chính vẫn được truyền đến toàn bộ dòng đã tích dù cửa sổ Quản lí bản ghi đang mở. Riêng lúc chọn **Thêm bản ghi** và bắt đầu ghi, đồng bộ trực tiếp vẫn tạm tắt để tránh ghi một thao tác thành nhiều bản sao.
+
 Ứng dụng Windows C++ độc lập để đồng bộ thao tác bàn phím và chuột giữa nhiều cửa sổ. Dự án được viết mới dựa trên hành vi quan sát trong video, không chứa hệ thống tài khoản, VIP hoặc key.
 
 ## Chức năng
