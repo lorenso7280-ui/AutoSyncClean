@@ -1647,33 +1647,22 @@ void LayoutThumbnails(HWND hwnd) {
     RECT client{}; GetClientRect(hwnd, &client);
     const int count = static_cast<int>(g_thumbnails.size());
     if (!count || client.right <= 0 || client.bottom <= 0) return;
-    constexpr int border = 1, titleHeight = 22, gap = 4;
+    constexpr int border = 1, titleHeight = 22, gap = 2;
     constexpr int maxColumns = 10;
-    const int columns = std::min(maxColumns, count);
     const int rows = (count + maxColumns - 1) / maxColumns;
     const int contentWidth = std::max(1, static_cast<int>(client.right) - border * 2);
-    const int contentHeight = std::max(1, static_cast<int>(client.bottom) - titleHeight - border);
-    const int cellWidth = std::max(1, (contentWidth - gap * (columns + 1)) / columns);
-    const int cellHeight = std::max(1, (contentHeight - gap * (rows + 1)) / rows);
+    // Always reserve ten equal columns, like 360Auto. Height comes from the
+    // 16:9 game frame instead of sharing all unused vertical space; this
+    // removes the large bands above, between and below thumbnail rows.
+    const int cellWidth = std::max(1, (contentWidth - gap * (maxColumns - 1)) / maxColumns);
+    const int cellHeight = std::max(1, MulDiv(cellWidth, 9, 16));
     for (int index = 0; index < count; ++index) {
         auto& item = g_thumbnails[static_cast<size_t>(index)];
         const int column = index % maxColumns;
         const int row = index / maxColumns;
-        const int cellLeft = border + gap + column * (cellWidth + gap);
-        const int cellTop = titleHeight + gap + row * (cellHeight + gap);
-        SIZE sourceSize{};
-        DwmQueryThumbnailSourceSize(item.handle, &sourceSize);
-        const int maxWidth = std::max(1, cellWidth);
-        const int maxHeight = std::max(1, cellHeight);
-        double scale = 1.0;
-        if (sourceSize.cx > 0 && sourceSize.cy > 0)
-            scale = std::min(static_cast<double>(maxWidth) / sourceSize.cx,
-                             static_cast<double>(maxHeight) / sourceSize.cy);
-        const int width = std::max(1, static_cast<int>(sourceSize.cx * scale));
-        const int height = std::max(1, static_cast<int>(sourceSize.cy * scale));
-        const int left = cellLeft + (cellWidth - width) / 2;
-        const int top = cellTop + (cellHeight - height) / 2;
-        item.destination = {left, top, left + width, top + height};
+        const int cellLeft = border + column * (cellWidth + gap);
+        const int cellTop = titleHeight + row * (cellHeight + gap);
+        item.destination = {cellLeft, cellTop, cellLeft + cellWidth, cellTop + cellHeight};
         DWM_THUMBNAIL_PROPERTIES properties{};
         properties.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
                              DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
@@ -1817,8 +1806,13 @@ void ToggleThumbnailViewer() {
     int onlineCount = 0;
     for (const auto& window : g_windows) if (IsWindow(window.hwnd)) ++onlineCount;
     const int rows = std::max(1, (onlineCount + 9) / 10);
+    const int workWidth = static_cast<int>(work.right - work.left);
     const int workHeight = static_cast<int>(work.bottom - work.top);
-    const int height = std::min(workHeight, 35 + rows * 125);
+    constexpr int border = 1, titleHeight = 22, gap = 2, columns = 10;
+    const int cellWidth = std::max(1, (workWidth - border * 2 - gap * (columns - 1)) / columns);
+    const int cellHeight = std::max(1, MulDiv(cellWidth, 9, 16));
+    const int height = std::min(workHeight,
+        titleHeight + border + rows * cellHeight + std::max(0, rows - 1) * gap);
     HWND viewer = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.ThumbnailViewer", L"Xem cửa sổ thu nhỏ",
                                   WS_POPUP, work.left, std::max(work.top, work.bottom - height),
                                   work.right - work.left, height, nullptr, nullptr, g_instance, nullptr);
