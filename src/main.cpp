@@ -84,7 +84,7 @@ struct NamedRecording {
 };
 
 HINSTANCE g_instance{};
-HWND g_main{}, g_list{}, g_btnSync{}, g_status{}, g_tooltip{};
+HWND g_main{}, g_list{}, g_btnSync{}, g_status{}, g_hoverTip{};
 HWND g_launcher{};
 HWND g_arranger{};
 HWND g_thumbnailViewer{};
@@ -1863,13 +1863,6 @@ void ToggleThumbnailViewer() {
         return;
     }
     RenameWindowsSequentially();
-    // The thumbnail command is a "minimize all" action, not a close action.
-    // Keep every game process alive and only send it to the taskbar.
-    int minimized = 0;
-    for (const auto& window : g_windows) {
-        if (!IsWindow(window.hwnd)) continue;
-        if (ShowWindowAsync(window.hwnd, SW_MINIMIZE)) ++minimized;
-    }
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{sizeof(wc)};
@@ -1899,7 +1892,6 @@ void ToggleThumbnailViewer() {
     if (viewer) {
         ShowWindow(viewer, SW_SHOW);
         UpdateWindow(viewer);
-        SetStatus(L"Đã thu nhỏ " + std::to_wstring(minimized) + L" cửa sổ game; game vẫn đang chạy.");
     }
 }
 
@@ -1989,16 +1981,6 @@ void Layout(HWND hwnd) {
     MoveWindow(g_status, 136, bottom + 3, std::max(60L, r.right - 140), 18, TRUE);
 }
 
-void AddToolbarTooltip(HWND control, const wchar_t* text) {
-    if (!g_tooltip || !control || !text) return;
-    TOOLINFOW tool{sizeof(tool)};
-    tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
-    tool.hwnd = g_main;
-    tool.uId = reinterpret_cast<UINT_PTR>(control);
-    tool.lpszText = const_cast<wchar_t*>(text);
-    SendMessageW(g_tooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
-}
-
 void ApplyBlueTitleBar(HWND hwnd) {
     // Match the solid royal-blue caption/border in the supplied UI mock-up.
     const COLORREF blue = RGB(49, 68, 181);
@@ -2006,6 +1988,61 @@ void ApplyBlueTitleBar(HWND hwnd) {
     DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue));
     DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue));
     DwmSetWindowAttribute(hwnd, 36, &white, sizeof(white));
+}
+
+void HideHoverTip() {
+    if (g_hoverTip && IsWindow(g_hoverTip)) DestroyWindow(g_hoverTip);
+    g_hoverTip = nullptr;
+}
+
+void ShowHoverTip(HWND control, const wchar_t* text) {
+    HideHoverTip();
+    if (!control || !text || !*text) return;
+    HDC dc = GetDC(control);
+    auto oldFont = SelectObject(dc, g_uiFont);
+    SIZE size{}; GetTextExtentPoint32W(dc, text, lstrlenW(text), &size);
+    SelectObject(dc, oldFont); ReleaseDC(control, dc);
+    POINT cursor{}; GetCursorPos(&cursor);
+    const int width = size.cx + 18, height = 25;
+    RECT work{}; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    int x = std::min(cursor.x + 12, work.right - width);
+    int y = std::min(cursor.y + 20, work.bottom - height);
+    g_hoverTip = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        L"STATIC", text, WS_POPUP | WS_BORDER | SS_CENTER | SS_CENTERIMAGE,
+        x, y, width, height, g_main, nullptr, g_instance, nullptr);
+    if (g_hoverTip) {
+        SendMessageW(g_hoverTip, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+        ShowWindow(g_hoverTip, SW_SHOWNOACTIVATE);
+    }
+}
+
+LRESULT CALLBACK ToolbarTooltipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                    UINT_PTR subclassId, DWORD_PTR refData) {
+    switch (msg) {
+        case WM_MOUSEMOVE: {
+            TRACKMOUSEEVENT tracking{sizeof(tracking), TME_HOVER | TME_LEAVE, hwnd, 350};
+            TrackMouseEvent(&tracking);
+            break;
+        }
+        case WM_MOUSEHOVER:
+            ShowHoverTip(hwnd, reinterpret_cast<const wchar_t*>(refData));
+            break;
+        case WM_MOUSELEAVE:
+        case WM_LBUTTONDOWN:
+            HideHoverTip();
+            break;
+        case WM_NCDESTROY:
+            HideHoverTip();
+            RemoveWindowSubclass(hwnd, ToolbarTooltipProc, subclassId);
+            break;
+    }
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
+
+void AddToolbarTooltip(HWND control, const wchar_t* text) {
+    if (control && text)
+        SetWindowSubclass(control, ToolbarTooltipProc, 2,
+                          reinterpret_cast<DWORD_PTR>(text));
 }
 
 void DrawMainCaption(HWND hwnd, HDC dc) {
@@ -2201,14 +2238,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HWND thumbnails = button(IDC_THUMBNAILS, L"▤");
             HWND settings = button(IDC_SETTINGS, L"⚙");
             button(IDC_SUPPORT, L"Nguyễn Đức Lộc");
-            g_tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
-                WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                hwnd, nullptr, g_instance, nullptr);
-            SetWindowPos(g_tooltip, HWND_TOPMOST, 0, 0, 0, 0,
-                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            SendMessageW(g_tooltip, TTM_SETMAXTIPWIDTH, 0, 260);
-            SendMessageW(g_tooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 350);
             AddToolbarTooltip(picker, L"Kéo thả target vào cửa sổ game");
             AddToolbarTooltip(launcher, L"Mở cửa sổ");
             AddToolbarTooltip(records, L"Quản lí bản ghi");
@@ -2323,7 +2352,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             SetSync(false); g_playing = false;
             if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
-            g_tooltip = nullptr;
+            HideHoverTip();
             if (g_uiFont) DeleteObject(g_uiFont);
             if (g_smallFont) DeleteObject(g_smallFont);
             PostQuitMessage(0); return 0;
@@ -2348,7 +2377,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     RegisterClassExW(&wc);
     // Do not combine WS_CAPTION with the client-drawn blue caption; doing so
     // creates two title bars on Windows 10. Keep resizing/system behavior only.
-    constexpr DWORD mainStyle = WS_POPUP | WS_THICKFRAME | WS_SYSMENU |
+    constexpr DWORD mainStyle = WS_POPUP | WS_SYSMENU |
                                 WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
     HWND hwnd = CreateWindowExW(0, kClassName, kTitle, mainStyle,
                                 CW_USEDEFAULT, CW_USEDEFAULT, 605, 454,
