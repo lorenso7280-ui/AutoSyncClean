@@ -78,6 +78,8 @@ Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm
 
 Mỗi lần khởi động, cửa sổ chính kích thước `605×454` được đặt chính giữa vùng làm việc của màn hình chính; phép căn giữa tự loại trừ phần taskbar.
 
+Bộ đếm trạng thái vẫn kiểm tra cửa sổ game mỗi 3 giây nhưng chỉ dựng lại ListView khi HWND, tiêu đề, kích thước, trạng thái hoặc checkbox thực sự thay đổi. Danh sách dùng chế độ vẽ kép và cập nhật `RDW_NOERASE`, tránh nhịp chớp trắng do xóa/dựng lại toàn bộ danh sách khi dữ liệu không đổi.
+
 1. Mở các cửa sổ cần điều khiển rồi bấm **Làm mới**.
 2. Đánh dấu các cửa sổ con cần nhận thao tác.
 3. Chọn cửa sổ nguồn và bấm **Cửa sổ chính**.
