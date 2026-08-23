@@ -76,6 +76,8 @@ Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn c�
 
 Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm tự vẽ bằng màu xanh đậm, không phụ thuộc tùy chọn màu tiêu đề của Windows 10/11. Cửa sổ không dùng `WS_CAPTION` hoặc `WS_THICKFRAME`, do đó chỉ có duy nhất một thanh tiêu đề màu xanh và không còn viền trắng ngoài bốn cạnh. Khi giữ con trỏ trên 7 nút biểu tượng khoảng 350 ms, tooltip popup hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
 
+Mỗi lần khởi động, cửa sổ chính kích thước `605×454` được đặt chính giữa vùng làm việc của màn hình chính; phép căn giữa tự loại trừ phần taskbar.
+
 1. Mở các cửa sổ cần điều khiển rồi bấm **Làm mới**.
 2. Đánh dấu các cửa sổ con cần nhận thao tác.
 3. Chọn cửa sổ nguồn và bấm **Cửa sổ chính**.
