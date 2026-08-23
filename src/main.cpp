@@ -98,6 +98,7 @@ std::unordered_set<HWND> g_ignored;
 std::vector<MacroEvent> g_macro;
 std::vector<NamedRecording> g_recordings;
 std::wstring g_trackedExePath;
+std::wstring g_lastRenderedListSignature;
 int g_activeRecording{-1};
 int g_syncFps{30};
 int g_playRepeat{1}, g_playGapSeconds{1};
@@ -212,6 +213,19 @@ void InsertColumn(int index, int width, const wchar_t* text) {
     ListView_InsertColumn(g_list, index, &c);
 }
 
+std::wstring BuildListSignature() {
+    std::wstring signature = std::to_wstring(reinterpret_cast<uintptr_t>(g_source)) + L"|" +
+                             std::to_wstring(g_sync ? 1 : 0) + L"|";
+    for (const auto& window : g_windows) {
+        signature += std::to_wstring(reinterpret_cast<uintptr_t>(window.hwnd));
+        signature += L":" + window.title + L":" + window.groupTitle + L":";
+        signature += window.selected ? L"1:" : L"0:";
+        signature += IsWindow(window.hwnd) ? L"1:" : L"0:";
+        signature += WindowSize(window.hwnd) + L"|";
+    }
+    return signature;
+}
+
 void RebuildList() {
     if (!g_list) return;
     const int selectedRow = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
@@ -250,7 +264,8 @@ void RebuildList() {
         ListView_EnsureVisible(g_list, topRow, FALSE);
     SendMessageW(g_list, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(g_list, nullptr, nullptr,
-                 RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+                 RDW_INVALIDATE | RDW_NOERASE | RDW_ALLCHILDREN);
+    g_lastRenderedListSignature = BuildListSignature();
     std::wstring s = L"Cửa sổ: " + std::to_wstring(g_windows.size());
     if (g_source) s += L" | Cửa sổ chính: " + WindowTitle(g_source);
     SetStatus(s);
@@ -298,7 +313,7 @@ void RefreshWindows(bool clearIgnored = false) {
         }
     }
     EnumWindows(EnumProc, 0);
-    RebuildList();
+    if (BuildListSignature() != g_lastRenderedListSignature) RebuildList();
     RefreshThumbnailViewer(false);
 }
 
