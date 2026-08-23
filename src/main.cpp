@@ -2396,8 +2396,13 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     // creates two title bars on Windows 10. Keep resizing/system behavior only.
     constexpr DWORD mainStyle = WS_POPUP | WS_SYSMENU |
                                 WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    constexpr int mainWidth = 605, mainHeight = 454;
+    RECT work{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    const int startX = work.left + std::max(0L, (work.right - work.left - mainWidth) / 2);
+    const int startY = work.top + std::max(0L, (work.bottom - work.top - mainHeight) / 2);
     HWND hwnd = CreateWindowExW(0, kClassName, kTitle, mainStyle,
-                                CW_USEDEFAULT, CW_USEDEFAULT, 605, 454,
+                                startX, startY, mainWidth, mainHeight,
                                 nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
     ShowWindow(hwnd, show);
