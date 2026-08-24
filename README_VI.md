@@ -1,4 +1,4 @@
-# AutoSync Clean v.60
+# AutoSync Clean v.61
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -65,6 +65,8 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Bấm tiêu đề cột **#** để tích toàn bộ cửa sổ; bấm lần nữa để bỏ tích toàn bộ.
 - Lệnh **Đóng cửa sổ này** sẽ đóng đồng thời tất cả các hàng đã tích checkbox; nếu chưa tích hàng nào thì chỉ đóng hàng đang bấm chuột phải.
 - **Sắp xếp cửa sổ** ghi nhớ mức kích thước đã chọn cho lần mở sau. Kích thước các ô thumbnail bên dưới không thay đổi khi resize game.
+- Sau khi resize game, chương trình chỉ áp lại đúng vùng hiển thị thumbnail đã có, không tính lại kích thước hoặc bố cục các ô xem trước.
+- Tên file chạy trong gói v61 là **AutoSyncClean v.61.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
 - Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
 - Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
 - Khi tắt Chế độ nhẹ máy hoặc thoát AutoSync Clean, chương trình khôi phục vị trí/trạng thái cửa sổ, mức ưu tiên CPU và affinity đã có trước lúc bật chế độ.
