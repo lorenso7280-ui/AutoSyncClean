@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.67 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.68 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -275,7 +275,7 @@ void RebuildList() {
         ListView_SetItemText(g_list, row, 1, id.data());
         std::wstring displayTitle = isSource ? L"★ [CỬA SỔ CHÍNH] " + w.title : w.title;
         ListView_SetItemText(g_list, row, 2, displayTitle.data());
-        std::wstring state = isSource ? L"Cửa sổ chính" :
+        std::wstring state = isSource ? L"★ Cửa sổ chính" :
             (IsWindow(w.hwnd) ? (g_sync && w.selected ? L"Đang đồng bộ" : L"Online") : L"Offline");
         ListView_SetItemText(g_list, row, 3, state.data());
         auto size = WindowSize(w.hwnd);
@@ -2638,6 +2638,61 @@ void DrawButton(const DRAWITEMSTRUCT* d) {
     SelectObject(d->hDC, oldFont);
 }
 
+void DrawRoundedLabel(HDC dc, RECT bounds, const std::wstring& text,
+                      COLORREF background, COLORREF foreground) {
+    SIZE measured{};
+    GetTextExtentPoint32W(dc, text.c_str(), static_cast<int>(text.size()), &measured);
+    const int height = std::max(16, std::min(22, bounds.bottom - bounds.top - 4));
+    const int width = measured.cx + 16;
+    RECT badge{bounds.left, bounds.top + (bounds.bottom - bounds.top - height) / 2,
+               std::min(bounds.right, bounds.left + width),
+               bounds.top + (bounds.bottom - bounds.top - height) / 2 + height};
+    HBRUSH brush = CreateSolidBrush(background);
+    const auto oldBrush = SelectObject(dc, brush);
+    const auto oldPen = SelectObject(dc, GetStockObject(NULL_PEN));
+    RoundRect(dc, badge.left, badge.top, badge.right, badge.bottom, 10, 10);
+    SelectObject(dc, oldPen);
+    SelectObject(dc, oldBrush);
+    DeleteObject(brush);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, foreground);
+    DrawTextW(dc, text.c_str(), -1, &badge, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+}
+
+void DrawStatusCell(const NMLVCUSTOMDRAW* draw) {
+    const int row = static_cast<int>(draw->nmcd.dwItemSpec);
+    RECT cell{};
+    ListView_GetSubItemRect(g_list, row, 3, LVIR_BOUNDS, &cell);
+    const bool selected = (draw->nmcd.uItemState & CDIS_SELECTED) != 0;
+    const COLORREF rowBackground = selected ? GetSysColor(COLOR_HIGHLIGHT) :
+        ((row % 2) ? RGB(247, 247, 247) : RGB(255, 255, 255));
+    HBRUSH background = CreateSolidBrush(rowBackground);
+    FillRect(draw->nmcd.hdc, &cell, background);
+    DeleteObject(background);
+
+    const HWND gameWindow = reinterpret_cast<HWND>(draw->nmcd.lItemlParam);
+    const bool isSource = g_source && gameWindow == g_source;
+    auto oldFont = SelectObject(draw->nmcd.hdc, g_smallFont);
+    RECT content = cell;
+    content.left += 9;
+    content.right -= 5;
+    if (isSource) {
+        RECT starBounds{content.left, content.top, content.left + 27, content.bottom};
+        DrawRoundedLabel(draw->nmcd.hdc, starBounds, L"★", RGB(218, 174, 35), RGB(255, 255, 255));
+        RECT labelBounds{content.left + 30, content.top, content.right, content.bottom};
+        DrawRoundedLabel(draw->nmcd.hdc, labelBounds, L"Cửa sổ chính", RGB(183, 220, 239), RGB(35, 55, 68));
+    } else if (IsWindow(gameWindow)) {
+        const bool synchronizing = g_sync && row >= 0 && row < static_cast<int>(g_windows.size()) &&
+                                    g_windows[static_cast<size_t>(row)].selected;
+        DrawRoundedLabel(draw->nmcd.hdc, content,
+                         synchronizing ? L"Đang đồng bộ" : L"Online",
+                         RGB(190, 232, 198), RGB(28, 70, 39));
+    } else {
+        DrawRoundedLabel(draw->nmcd.hdc, content, L"Offline", RGB(244, 190, 186), RGB(105, 35, 31));
+    }
+    SelectObject(draw->nmcd.hdc, oldFont);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_NCCALCSIZE:
@@ -2689,7 +2744,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
-            ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_DOUBLEBUFFER);
+            ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES |
+                                                      LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
             ListView_SetBkColor(g_list, RGB(255,255,255));
             ListView_SetTextBkColor(g_list, RGB(255,255,255));
             InsertColumn(0, 34, L"#"); InsertColumn(1, 92, L"Mã cửa sổ");
@@ -2765,13 +2821,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (draw->nmcd.dwDrawStage == CDDS_PREPAINT)
                     return CDRF_NOTIFYITEMDRAW;
                 if (draw->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
+                {
+                    const int row = static_cast<int>(draw->nmcd.dwItemSpec);
+                    draw->clrTextBk = (row % 2) ? RGB(247, 247, 247) : RGB(255, 255, 255);
                     return CDRF_NOTIFYSUBITEMDRAW;
+                }
                 if (draw->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM) &&
                     draw->iSubItem == 3) {
-                    const HWND gameWindow = reinterpret_cast<HWND>(draw->nmcd.lItemlParam);
-                    draw->clrText = RGB(255, 255, 255);
-                    draw->clrTextBk = IsWindow(gameWindow) ? RGB(39, 174, 96) : RGB(220, 53, 69);
-                    return CDRF_NEWFONT;
+                    DrawStatusCell(draw);
+                    return CDRF_SKIPDEFAULT;
                 }
                 if (draw->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM) &&
                     draw->iSubItem == 4) {
