@@ -36,7 +36,7 @@ enum : int {
 enum : int {
     IDC_SETTINGS_AUTORENAME = 3201, IDC_SETTINGS_DELAY, IDC_SETTINGS_FPS_ENABLE,
     IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE, IDC_SETTINGS_LIGHT_ENABLE,
-    IDC_SETTINGS_LIGHT_SIZE, IDC_SETTINGS_LIGHT_AFFINITY,
+    IDC_SETTINGS_LIGHT_SIZE, IDC_SETTINGS_LIGHT_AFFINITY, IDC_SETTINGS_LIGHT_KEEP_MAIN,
     IDC_RECORD_START = 3301, IDC_RECORD_STOP, IDC_RECORD_REPEAT, IDC_RECORD_GAP,
     IDC_RECORD_LIST, IDC_RECORD_EVENTS, IDC_RECORD_VM_MODE,
     IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL,
@@ -114,8 +114,9 @@ int g_activeRecording{-1};
 int g_syncFps{30};
 bool g_syncFpsEnabled{true};
 bool g_lightMode{};
-int g_lightSizeIndex{1};
+int g_lightSizeIndex{2};
 int g_lightAffinityIndex{};
+bool g_lightKeepMainOnly{};
 int g_playRepeat{1}, g_playGapSeconds{1};
 bool g_vmPlaybackMode{};
 HWND g_source{};
@@ -639,9 +640,9 @@ void TileSelected() {
 }
 
 std::pair<int, int> LightweightWindowSize() {
-    static constexpr int widths[]{480, 640, 960};
-    static constexpr int heights[]{270, 360, 540};
-    const int index = std::clamp(g_lightSizeIndex, 0, 2);
+    static constexpr int widths[]{320, 480, 640, 960};
+    static constexpr int heights[]{180, 270, 360, 540};
+    const int index = std::clamp(g_lightSizeIndex, 0, 3);
     return {widths[index], heights[index]};
 }
 
@@ -704,9 +705,7 @@ void RestoreLightweightMode() {
         if (!IsWindow(hwnd)) continue;
         WINDOWPLACEMENT restored = placement;
         restored.length = sizeof(restored);
-        restored.showCmd = SW_SHOWNORMAL;
         SetWindowPlacement(hwnd, &restored);
-        ShowWindowAsync(hwnd, SW_RESTORE);
     }
     g_lightPlacements.clear();
     std::vector<DWORD> processIds;
@@ -738,9 +737,9 @@ void ApplyLightweightMode() {
         DWORD processId{};
         GetWindowThreadProcessId(window.hwnd, &processId);
         if (window.hwnd == g_source) {
-            if (IsIconic(window.hwnd)) ShowWindowAsync(window.hwnd, SW_RESTORE);
+            if (g_lightKeepMainOnly && IsIconic(window.hwnd)) ShowWindowAsync(window.hwnd, SW_RESTORE);
         } else {
-            if (!IsIconic(window.hwnd)) ShowWindowAsync(window.hwnd, SW_MINIMIZE);
+            if (g_lightKeepMainOnly && !IsIconic(window.hwnd)) ShowWindowAsync(window.hwnd, SW_MINIMIZE);
             if (processId && processId != sourceProcessId) backgroundProcesses.insert(processId);
         }
     }
@@ -1058,10 +1057,11 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 CBS_DROPDOWNLIST, 151, 270, 125, 100, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_SIZE), g_instance, nullptr);
             SendMessageW(lightSize, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(lightSize, L"320x180");
             ComboBox_AddString(lightSize, L"480x270");
             ComboBox_AddString(lightSize, L"640x360");
             ComboBox_AddString(lightSize, L"960x540");
-            ComboBox_SetCurSel(lightSize, std::clamp(g_lightSizeIndex, 0, 2));
+            ComboBox_SetCurSel(lightSize, std::clamp(g_lightSizeIndex, 0, 3));
             label(L"Giới hạn CPU:", 22, 311, 125);
             HWND affinity = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 CBS_DROPDOWNLIST, 151, 307, 175, 110, hwnd,
@@ -1071,8 +1071,13 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ComboBox_AddString(affinity, L"Dùng 75% số lõi");
             ComboBox_AddString(affinity, L"Dùng 50% số lõi");
             ComboBox_SetCurSel(affinity, std::clamp(g_lightAffinityIndex, 0, 2));
-            label(L"Cửa sổ phụ: Below normal + minimize. Cửa sổ chính vẫn mở.", 22, 347, 420);
-            label(L"Tắt chế độ để khôi phục cửa sổ, priority và affinity ban đầu.", 22, 371, 430);
+            HWND keepMain = CreateWindowW(L"BUTTON", L"Chỉ giữ cửa sổ chính hiển thị",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 343, 300, 24, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_KEEP_MAIN), g_instance, nullptr);
+            SendMessageW(keepMain, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            Button_SetCheck(keepMain, g_lightKeepMainOnly ? BST_CHECKED : BST_UNCHECKED);
+            label(L"Cửa sổ phụ luôn Below normal; chỉ thu nhỏ khi chọn mục trên.", 22, 375, 430);
+            label(L"Tắt chế độ để khôi phục cửa sổ, priority và affinity ban đầu.", 22, 399, 430);
             return 0;
         }
         case WM_HSCROLL:
@@ -1098,7 +1103,7 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (LOWORD(wp) == IDC_SETTINGS_LIGHT_SIZE && HIWORD(wp) == CBN_SELCHANGE) {
                 int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_SIZE));
-                g_lightSizeIndex = std::clamp(index == CB_ERR ? 1 : index, 0, 2);
+                g_lightSizeIndex = std::clamp(index == CB_ERR ? 2 : index, 0, 3);
                 SaveSettingDword(L"LightSize", static_cast<DWORD>(g_lightSizeIndex));
                 ApplyLightweightMode();
             }
@@ -1107,6 +1112,26 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g_lightAffinityIndex = std::clamp(index == CB_ERR ? 0 : index, 0, 2);
                 SaveSettingDword(L"LightAffinity", static_cast<DWORD>(g_lightAffinityIndex));
                 ApplyLightweightMode();
+            }
+            if (LOWORD(wp) == IDC_SETTINGS_LIGHT_KEEP_MAIN) {
+                const bool enabled = Button_GetCheck(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_KEEP_MAIN)) == BST_CHECKED;
+                const bool wasEnabled = g_lightKeepMainOnly;
+                g_lightKeepMainOnly = enabled;
+                SaveSettingDword(L"LightKeepMainOnly", enabled ? 1 : 0);
+                if (g_lightMode && wasEnabled && !enabled) {
+                    const auto [width, height] = LightweightWindowSize();
+                    for (const auto& window : g_windows) {
+                        if (!IsWindow(window.hwnd) || window.hwnd == g_source) continue;
+                        ShowWindowAsync(window.hwnd, SW_RESTORE);
+                        RECT current{};
+                        if (GetWindowRect(window.hwnd, &current))
+                            SetWindowPos(window.hwnd, nullptr, current.left, current.top, width, height,
+                                SWP_ASYNCWINDOWPOS | SWP_NOZORDER | SWP_NOOWNERZORDER |
+                                SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                    }
+                } else {
+                    ApplyLightweightMode();
+                }
             }
             return 0;
         case WM_DESTROY: g_settingsWindow = nullptr; return 0;
@@ -1124,7 +1149,7 @@ void ShowSettings() {
     }
     RECT owner{}; GetWindowRect(g_main, &owner);
     g_settingsWindow = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.Settings", L"Thiết lập",
-        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 35, 470, 445,
+        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 20, 470, 475,
         g_main, nullptr, g_instance, nullptr);
     ShowWindow(g_settingsWindow, SW_SHOW); UpdateWindow(g_settingsWindow);
 }
@@ -1872,11 +1897,13 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 CBS_DROPDOWNLIST | WS_VSCROLL, 174, 80, 164, 130, hwnd,
                 reinterpret_cast<HMENU>(IDC_ARRANGE_WIDTH), g_instance, nullptr);
             SendMessageW(sizeCombo, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(sizeCombo, L"320x180");
+            ComboBox_AddString(sizeCombo, L"640x360");
             ComboBox_AddString(sizeCombo, L"960x540");
             ComboBox_AddString(sizeCombo, L"1280x720");
             ComboBox_AddString(sizeCombo, L"1600x900");
             ComboBox_AddString(sizeCombo, L"1920x1080");
-            ComboBox_SetCurSel(sizeCombo, 0);
+            ComboBox_SetCurSel(sizeCombo, 2);
             label(L"Vị trí cách trái (X):", 18, 119, 150); edit(IDC_ARRANGE_X, L"0", 174, 116, 68); label(L"Pixel", 250, 119, 45);
             label(L"Vị trí cách trên (Y):", 18, 155, 150); edit(IDC_ARRANGE_Y, L"20", 174, 152, 68); label(L"Pixel", 250, 155, 45);
             label(L"Độ lệch mỗi cửa sổ X:", 18, 191, 160); edit(IDC_ARRANGE_OFFSET_X, L"0", 174, 188, 68);
@@ -1889,11 +1916,11 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND:
             if (LOWORD(wp) == IDC_ARRANGE_OK) {
                 ArrangeRequest request;
-                static constexpr int widths[]{960, 1280, 1600, 1920};
-                static constexpr int heights[]{540, 720, 900, 1080};
+                static constexpr int widths[]{320, 640, 960, 1280, 1600, 1920};
+                static constexpr int heights[]{180, 360, 540, 720, 900, 1080};
                 int sizeIndex = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_ARRANGE_WIDTH));
                 if (sizeIndex == CB_ERR) sizeIndex = 0;
-                sizeIndex = std::clamp(sizeIndex, 0, 3);
+                sizeIndex = std::clamp(sizeIndex, 0, 5);
                 request.width = widths[sizeIndex];
                 request.height = heights[sizeIndex];
                 request.x = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_X).c_str()), 0, 30000);
@@ -2606,8 +2633,15 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_syncFps = std::clamp(static_cast<int>(LoadSettingDword(L"SyncFps", 30)), 1, 60);
     g_syncFpsEnabled = LoadSettingDword(L"SyncFpsEnabled", 1) != 0;
     g_lightMode = LoadSettingDword(L"LightMode", 0) != 0;
-    g_lightSizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightSize", 1)), 0, 2);
+    const DWORD lightSizeVersion = LoadSettingDword(L"LightSizeVersion", 1);
+    g_lightSizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightSize", 1)), 0, 3);
+    if (lightSizeVersion < 2) {
+        g_lightSizeIndex = std::clamp(g_lightSizeIndex + 1, 1, 3);
+        SaveSettingDword(L"LightSize", static_cast<DWORD>(g_lightSizeIndex));
+        SaveSettingDword(L"LightSizeVersion", 2);
+    }
     g_lightAffinityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightAffinity", 0)), 0, 2);
+    g_lightKeepMainOnly = LoadSettingDword(L"LightKeepMainOnly", 0) != 0;
     INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
                                          ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
