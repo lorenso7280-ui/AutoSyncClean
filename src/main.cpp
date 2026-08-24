@@ -2546,6 +2546,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_NOTIFY: {
             auto* n = reinterpret_cast<NMHDR*>(lp);
+            if (n->idFrom == IDC_LIST && n->code == NM_CUSTOMDRAW) {
+                auto* draw = reinterpret_cast<NMLVCUSTOMDRAW*>(lp);
+                if (draw->nmcd.dwDrawStage == CDDS_PREPAINT)
+                    return CDRF_NOTIFYITEMDRAW;
+                if (draw->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
+                    return CDRF_NOTIFYSUBITEMDRAW;
+                if (draw->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM) &&
+                    draw->iSubItem == 3) {
+                    const HWND gameWindow = reinterpret_cast<HWND>(draw->nmcd.lItemlParam);
+                    draw->clrText = RGB(255, 255, 255);
+                    draw->clrTextBk = IsWindow(gameWindow) ? RGB(39, 174, 96) : RGB(220, 53, 69);
+                    return CDRF_NEWFONT;
+                }
+            }
             if (n->idFrom == IDC_LIST && n->code == NM_DBLCLK) SetMainWindow(SelectedHwnd());
             return 0;
         }
