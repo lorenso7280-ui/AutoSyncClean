@@ -56,7 +56,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chỉ bật chế độ máy ảo khi game và AutoSyncClean cùng chạy trong Windows khách (VirtualBox, VMware hoặc Hyper-V). Khi đó con trỏ của Windows khách bị điều khiển, còn chuột máy chính vẫn độc lập. Nếu bật trực tiếp trên máy chính, chuột máy chính cũng sẽ bị khóa và di chuyển theo bản ghi.
 - Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Khi không bật chế độ máy ảo, phát lại vẫn dùng thông điệp nền và không di chuyển hoặc khóa con trỏ thật.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
-- Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, luôn khởi tạo ở mức mặc định 30 FPS. Giá trị này điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
+- Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, mặc định 30 FPS ở lần chạy đầu. Phần mềm lưu giá trị FPS và trạng thái bật/tắt vào thiết lập người dùng Windows, nên đóng rồi mở lại vẫn giữ lựa chọn gần nhất. Giá trị này chỉ điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
 - **Đóng tất cả** áp dụng cho mọi cửa sổ game `ONLINE`, bao gồm cửa sổ chính và không phụ thuộc checkbox. Phần mềm gửi lệnh đóng đồng thời, chờ 300 ms rồi buộc kết thúc đúng các tiến trình game vẫn không phản hồi; lệnh này tự tắt đồng bộ trước và có thể làm mất dữ liệu game chưa lưu.
 - **Hiện tất cả** tiếp tục áp dụng cho những dòng đã tích checkbox.
