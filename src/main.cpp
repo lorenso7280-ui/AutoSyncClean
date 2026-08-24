@@ -11,6 +11,7 @@
 #include <cwctype>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include "resource.h"
@@ -34,7 +35,8 @@ enum : int {
 
 enum : int {
     IDC_SETTINGS_AUTORENAME = 3201, IDC_SETTINGS_DELAY, IDC_SETTINGS_FPS_ENABLE,
-    IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE,
+    IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE, IDC_SETTINGS_LIGHT_ENABLE,
+    IDC_SETTINGS_LIGHT_SIZE, IDC_SETTINGS_LIGHT_AFFINITY,
     IDC_RECORD_START = 3301, IDC_RECORD_STOP, IDC_RECORD_REPEAT, IDC_RECORD_GAP,
     IDC_RECORD_LIST, IDC_RECORD_EVENTS, IDC_RECORD_VM_MODE,
     IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL,
@@ -83,6 +85,13 @@ struct NamedRecording {
     std::vector<MacroEvent> events;
 };
 
+struct ProcessTuningState {
+    DWORD priorityClass{NORMAL_PRIORITY_CLASS};
+    DWORD_PTR processMask{};
+    DWORD_PTR systemMask{};
+    bool affinityValid{};
+};
+
 HINSTANCE g_instance{};
 HWND g_main{}, g_list{}, g_btnSync{}, g_status{}, g_hoverTip{};
 HWND g_launcher{};
@@ -95,6 +104,8 @@ HFONT g_uiFont{}, g_smallFont{};
 std::vector<WindowItem> g_windows;
 std::vector<ThumbnailItem> g_thumbnails;
 std::unordered_set<HWND> g_ignored;
+std::unordered_map<HWND, WINDOWPLACEMENT> g_lightPlacements;
+std::unordered_map<DWORD, ProcessTuningState> g_processTuning;
 std::vector<MacroEvent> g_macro;
 std::vector<NamedRecording> g_recordings;
 std::wstring g_trackedExePath;
@@ -102,6 +113,9 @@ std::wstring g_lastRenderedListSignature;
 int g_activeRecording{-1};
 int g_syncFps{30};
 bool g_syncFpsEnabled{true};
+bool g_lightMode{};
+int g_lightSizeIndex{1};
+int g_lightAffinityIndex{};
 int g_playRepeat{1}, g_playGapSeconds{1};
 bool g_vmPlaybackMode{};
 HWND g_source{};
@@ -119,6 +133,8 @@ void SyncChecksFromList();
 void RefreshWindows(bool clearIgnored);
 void RefreshThumbnailViewer(bool force);
 std::wstring ExecutablePath(HWND hwnd);
+void ApplyLightweightMode();
+void SetLightweightMode(bool enabled);
 
 std::wstring LoadSettingString(const wchar_t* name, const wchar_t* fallback = L"") {
     wchar_t value[32768]{};
@@ -314,6 +330,7 @@ void RefreshWindows(bool clearIgnored = false) {
         }
     }
     EnumWindows(EnumProc, 0);
+    ApplyLightweightMode();
     if (BuildListSignature() != g_lastRenderedListSignature) RebuildList();
     RefreshThumbnailViewer(false);
 }
@@ -587,6 +604,7 @@ int SelectedIndex() {
 void SetMainWindow(HWND hwnd) {
     if (!hwnd || !IsWindow(hwnd)) return;
     g_source = hwnd;
+    ApplyLightweightMode();
     RebuildList();
     SetStatus(L"Đã chọn cửa sổ chính: " + WindowTitle(hwnd));
     ActivateSourceWindow();
@@ -617,6 +635,132 @@ void TileSelected() {
         int y = work.top + static_cast<int>(i / cols) * height;
         ShowWindow(items[i], SW_RESTORE);
         SetWindowPos(items[i], nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+std::pair<int, int> LightweightWindowSize() {
+    static constexpr int widths[]{480, 640, 960};
+    static constexpr int heights[]{270, 360, 540};
+    const int index = std::clamp(g_lightSizeIndex, 0, 2);
+    return {widths[index], heights[index]};
+}
+
+DWORD_PTR RotatingAffinityMask(DWORD_PTR availableMask, int percentage, DWORD seed) {
+    std::vector<int> bits;
+    for (int bit = 0; bit < static_cast<int>(sizeof(DWORD_PTR) * 8); ++bit) {
+        const DWORD_PTR flag = static_cast<DWORD_PTR>(1) << bit;
+        if (availableMask & flag) bits.push_back(bit);
+    }
+    if (bits.size() <= 2 || percentage >= 100) return availableMask;
+    const int keep = std::clamp(static_cast<int>((bits.size() * percentage + 99) / 100), 2,
+                                static_cast<int>(bits.size()));
+    const int start = static_cast<int>(seed % bits.size());
+    DWORD_PTR mask{};
+    for (int index = 0; index < keep; ++index)
+        mask |= static_cast<DWORD_PTR>(1) << bits[static_cast<size_t>((start + index) % bits.size())];
+    return mask & availableMask;
+}
+
+void RestoreTunedProcess(DWORD processId, bool eraseState) {
+    auto found = g_processTuning.find(processId);
+    if (found == g_processTuning.end()) return;
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_INFORMATION,
+                                 FALSE, processId);
+    if (process) {
+        SetPriorityClass(process, found->second.priorityClass);
+        if (found->second.affinityValid && found->second.processMask)
+            SetProcessAffinityMask(process, found->second.processMask);
+        CloseHandle(process);
+    }
+    if (eraseState) g_processTuning.erase(found);
+}
+
+void TuneBackgroundProcess(DWORD processId) {
+    if (!processId) return;
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_INFORMATION,
+                                 FALSE, processId);
+    if (!process) return;
+    auto found = g_processTuning.find(processId);
+    if (found == g_processTuning.end()) {
+        ProcessTuningState state{};
+        const DWORD currentPriority = GetPriorityClass(process);
+        if (currentPriority) state.priorityClass = currentPriority;
+        state.affinityValid = GetProcessAffinityMask(process, &state.processMask, &state.systemMask) != FALSE;
+        found = g_processTuning.emplace(processId, state).first;
+    }
+    SetPriorityClass(process, BELOW_NORMAL_PRIORITY_CLASS);
+    if (g_lightAffinityIndex > 0 && found->second.affinityValid) {
+        const int percentage = g_lightAffinityIndex == 1 ? 75 : 50;
+        const DWORD_PTR mask = RotatingAffinityMask(found->second.systemMask, percentage, processId);
+        if (mask) SetProcessAffinityMask(process, mask);
+    } else if (found->second.affinityValid && found->second.processMask) {
+        SetProcessAffinityMask(process, found->second.processMask);
+    }
+    CloseHandle(process);
+}
+
+void RestoreLightweightMode() {
+    for (auto& [hwnd, placement] : g_lightPlacements) {
+        if (!IsWindow(hwnd)) continue;
+        WINDOWPLACEMENT restored = placement;
+        restored.length = sizeof(restored);
+        restored.showCmd = SW_SHOWNORMAL;
+        SetWindowPlacement(hwnd, &restored);
+        ShowWindowAsync(hwnd, SW_RESTORE);
+    }
+    g_lightPlacements.clear();
+    std::vector<DWORD> processIds;
+    processIds.reserve(g_processTuning.size());
+    for (const auto& item : g_processTuning) processIds.push_back(item.first);
+    for (DWORD processId : processIds) RestoreTunedProcess(processId, true);
+}
+
+void ApplyLightweightMode() {
+    if (!g_lightMode) return;
+    const auto [width, height] = LightweightWindowSize();
+    DWORD sourceProcessId{};
+    if (g_source && IsWindow(g_source)) GetWindowThreadProcessId(g_source, &sourceProcessId);
+    std::unordered_set<DWORD> backgroundProcesses;
+    for (const auto& window : g_windows) {
+        if (!IsWindow(window.hwnd)) continue;
+        if (!g_lightPlacements.contains(window.hwnd)) {
+            WINDOWPLACEMENT placement{sizeof(placement)};
+            if (GetWindowPlacement(window.hwnd, &placement))
+                g_lightPlacements.emplace(window.hwnd, placement);
+        }
+        RECT current{};
+        if (!IsIconic(window.hwnd) && GetWindowRect(window.hwnd, &current) &&
+            ((current.right - current.left) != width || (current.bottom - current.top) != height)) {
+            SetWindowPos(window.hwnd, nullptr, current.left, current.top, width, height,
+                         SWP_ASYNCWINDOWPOS | SWP_NOZORDER | SWP_NOOWNERZORDER |
+                         SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
+        DWORD processId{};
+        GetWindowThreadProcessId(window.hwnd, &processId);
+        if (window.hwnd == g_source) {
+            if (IsIconic(window.hwnd)) ShowWindowAsync(window.hwnd, SW_RESTORE);
+        } else {
+            if (!IsIconic(window.hwnd)) ShowWindowAsync(window.hwnd, SW_MINIMIZE);
+            if (processId && processId != sourceProcessId) backgroundProcesses.insert(processId);
+        }
+    }
+    if (sourceProcessId) RestoreTunedProcess(sourceProcessId, false);
+    for (DWORD processId : backgroundProcesses) TuneBackgroundProcess(processId);
+}
+
+void SetLightweightMode(bool enabled) {
+    if (enabled == g_lightMode) {
+        if (enabled) ApplyLightweightMode();
+        return;
+    }
+    g_lightMode = enabled;
+    SaveSettingDword(L"LightMode", enabled ? 1 : 0);
+    if (enabled) {
+        ApplyLightweightMode();
+        SetStatus(L"Đã bật Chế độ nhẹ máy.");
+    } else {
+        RestoreLightweightMode();
+        SetStatus(L"Đã tắt Chế độ nhẹ máy và khôi phục các cửa sổ.");
     }
 }
 
@@ -904,6 +1048,31 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             label(L"(FPS)", 326, 136, 50);
             label(L"FPS điều chỉnh tần suất truyền chuyển động chuột; mặc định 30.", 22, 183, 420);
             label(L"Phạm vi hợp lệ: 1 đến 60 FPS.", 22, 207, 350);
+            HWND light = CreateWindowW(L"BUTTON", L"Chế độ nhẹ máy (giảm tải nhiều cửa sổ)",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 239, 330, 24, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_ENABLE), g_instance, nullptr);
+            SendMessageW(light, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            Button_SetCheck(light, g_lightMode ? BST_CHECKED : BST_UNCHECKED);
+            label(L"Kích thước game:", 22, 274, 125);
+            HWND lightSize = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                CBS_DROPDOWNLIST, 151, 270, 125, 100, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_SIZE), g_instance, nullptr);
+            SendMessageW(lightSize, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(lightSize, L"480x270");
+            ComboBox_AddString(lightSize, L"640x360");
+            ComboBox_AddString(lightSize, L"960x540");
+            ComboBox_SetCurSel(lightSize, std::clamp(g_lightSizeIndex, 0, 2));
+            label(L"Giới hạn CPU:", 22, 311, 125);
+            HWND affinity = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                CBS_DROPDOWNLIST, 151, 307, 175, 110, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_AFFINITY), g_instance, nullptr);
+            SendMessageW(affinity, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(affinity, L"Không giới hạn affinity");
+            ComboBox_AddString(affinity, L"Dùng 75% số lõi");
+            ComboBox_AddString(affinity, L"Dùng 50% số lõi");
+            ComboBox_SetCurSel(affinity, std::clamp(g_lightAffinityIndex, 0, 2));
+            label(L"Cửa sổ phụ: Below normal + minimize. Cửa sổ chính vẫn mở.", 22, 347, 420);
+            label(L"Tắt chế độ để khôi phục cửa sổ, priority và affinity ban đầu.", 22, 371, 430);
             return 0;
         }
         case WM_HSCROLL:
@@ -923,6 +1092,22 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 EnableWindow(GetDlgItem(hwnd, IDC_SETTINGS_FPS_SLIDER), enabled);
                 SetStatus(L"FPS đồng bộ: " + std::to_wstring(enabled ? g_syncFps : 30));
             }
+            if (LOWORD(wp) == IDC_SETTINGS_LIGHT_ENABLE) {
+                const bool enabled = Button_GetCheck(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_ENABLE)) == BST_CHECKED;
+                SetLightweightMode(enabled);
+            }
+            if (LOWORD(wp) == IDC_SETTINGS_LIGHT_SIZE && HIWORD(wp) == CBN_SELCHANGE) {
+                int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_SIZE));
+                g_lightSizeIndex = std::clamp(index == CB_ERR ? 1 : index, 0, 2);
+                SaveSettingDword(L"LightSize", static_cast<DWORD>(g_lightSizeIndex));
+                ApplyLightweightMode();
+            }
+            if (LOWORD(wp) == IDC_SETTINGS_LIGHT_AFFINITY && HIWORD(wp) == CBN_SELCHANGE) {
+                int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_AFFINITY));
+                g_lightAffinityIndex = std::clamp(index == CB_ERR ? 0 : index, 0, 2);
+                SaveSettingDword(L"LightAffinity", static_cast<DWORD>(g_lightAffinityIndex));
+                ApplyLightweightMode();
+            }
             return 0;
         case WM_DESTROY: g_settingsWindow = nullptr; return 0;
     }
@@ -939,7 +1124,7 @@ void ShowSettings() {
     }
     RECT owner{}; GetWindowRect(g_main, &owner);
     g_settingsWindow = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.Settings", L"Thiết lập",
-        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 60, 470, 290,
+        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 35, 470, 445,
         g_main, nullptr, g_instance, nullptr);
     ShowWindow(g_settingsWindow, SW_SHOW); UpdateWindow(g_settingsWindow);
 }
@@ -1751,6 +1936,16 @@ void ClearThumbnails() {
     g_thumbnails.clear();
 }
 
+void SetThumbnailRendering(bool visible) {
+    for (auto& item : g_thumbnails) {
+        if (!item.handle) continue;
+        DWM_THUMBNAIL_PROPERTIES properties{};
+        properties.dwFlags = DWM_TNP_VISIBLE;
+        properties.fVisible = visible ? TRUE : FALSE;
+        DwmUpdateThumbnailProperties(item.handle, &properties);
+    }
+}
+
 void LayoutThumbnails(HWND hwnd) {
     RECT client{}; GetClientRect(hwnd, &client);
     const int count = static_cast<int>(g_thumbnails.size());
@@ -1793,7 +1988,8 @@ bool ThumbnailSourcesChanged() {
 }
 
 void RefreshThumbnailViewer(bool force = false) {
-    if (!g_thumbnailViewer || (!force && !ThumbnailSourcesChanged())) return;
+    if (!g_thumbnailViewer || !IsWindowVisible(g_thumbnailViewer) || IsIconic(g_thumbnailViewer) ||
+        (!force && !ThumbnailSourcesChanged())) return;
     ClearThumbnails();
     for (const auto& window : g_windows) {
         if (!IsWindow(window.hwnd)) continue;
@@ -1812,6 +2008,11 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             return 0;
         }
         case WM_SIZE:
+            if (wp == SIZE_MINIMIZED) {
+                SetThumbnailRendering(false);
+                return 0;
+            }
+            SetThumbnailRendering(true);
             LayoutThumbnails(hwnd);
             return 0;
         case WM_ERASEBKGND: {
@@ -2389,6 +2590,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_DESTROY:
             SetSync(false); g_playing = false;
+            if (g_lightMode) RestoreLightweightMode();
             if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
             HideHoverTip();
             if (g_uiFont) DeleteObject(g_uiFont);
@@ -2403,6 +2605,9 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_instance = instance;
     g_syncFps = std::clamp(static_cast<int>(LoadSettingDword(L"SyncFps", 30)), 1, 60);
     g_syncFpsEnabled = LoadSettingDword(L"SyncFpsEnabled", 1) != 0;
+    g_lightMode = LoadSettingDword(L"LightMode", 0) != 0;
+    g_lightSizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightSize", 1)), 0, 2);
+    g_lightAffinityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightAffinity", 0)), 0, 2);
     INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
                                          ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
