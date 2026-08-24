@@ -1,4 +1,4 @@
-# AutoSync Clean v.64
+# AutoSync Clean v.65
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -71,7 +71,14 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chế độ nhẹ máy có thể chỉ giữ cửa sổ chính hiển thị; các cửa sổ phụ chỉ minimize và vẫn nhận đồng bộ nếu đang Online và được checkbox.
 - Đồng bộ chuột ánh xạ tọa độ đến đúng render/control HWND của từng cửa sổ và gửi vị trí ảo trước sự kiện nút chuột, không di chuyển con trỏ thật.
 - Từ v64, **Chế độ nhẹ máy** và **Chỉ giữ cửa sổ chính hiển thị** mặc định đều không được đánh dấu. Máy nâng cấp từ bản cũ cũng được đặt lại hai tùy chọn này một lần.
-- Tên file chạy trong gói v64 là **AutoSyncClean v.64.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
+- Tên file chạy trong gói v65 là **AutoSyncClean v.65.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
+
+## Cửa sổ chính và cửa sổ phụ
+
+- **Cửa sổ chính** là các cửa sổ game thật ở phía trên. Mục **Sắp xếp cửa sổ** tiếp tục thay đổi kích thước và vị trí của nhóm này.
+- **Cửa sổ phụ** là các ô xem trước trong thanh **Xem cửa sổ thu nhỏ** phía dưới.
+- Trong **Thiết lập**, cửa sổ phụ có kích thước riêng **320x180** hoặc **640x360**. Thay đổi này không resize cửa sổ game thật.
+- Tiến trình nền có thể dùng mức ưu tiên **Normal** hoặc **Below normal**; mặc định là **Below normal** khi bật Chế độ nhẹ máy.
 - Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
 - Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
 - Khi tắt Chế độ nhẹ máy hoặc thoát AutoSync Clean, chương trình khôi phục vị trí/trạng thái cửa sổ, mức ưu tiên CPU và affinity đã có trước lúc bật chế độ.
