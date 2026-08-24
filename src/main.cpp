@@ -267,8 +267,8 @@ void RebuildList() {
         ListView_SetItemText(g_list, row, 1, id.data());
         std::wstring displayTitle = isSource ? L"★ [CỬA SỔ CHÍNH] " + w.title : w.title;
         ListView_SetItemText(g_list, row, 2, displayTitle.data());
-        std::wstring state = isSource ? L"CỬA SỔ CHÍNH" :
-            (IsWindow(w.hwnd) ? (g_sync && w.selected ? L"ĐANG ĐỒNG BỘ" : L"ONLINE") : L"OFFLINE");
+        std::wstring state = isSource ? L"Cửa sổ chính" :
+            (IsWindow(w.hwnd) ? (g_sync && w.selected ? L"Đang đồng bộ" : L"Online") : L"Offline");
         ListView_SetItemText(g_list, row, 3, state.data());
         auto size = WindowSize(w.hwnd);
         ListView_SetItemText(g_list, row, 4, size.data());
@@ -2557,6 +2557,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     const HWND gameWindow = reinterpret_cast<HWND>(draw->nmcd.lItemlParam);
                     draw->clrText = RGB(255, 255, 255);
                     draw->clrTextBk = IsWindow(gameWindow) ? RGB(39, 174, 96) : RGB(220, 53, 69);
+                    return CDRF_NEWFONT;
+                }
+                if (draw->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM) &&
+                    draw->iSubItem == 4) {
+                    // Reset the colors after painting the status subitem. The
+                    // ListView reuses this custom-draw structure for the next
+                    // subitem, otherwise the status background leaks into the
+                    // Size column.
+                    draw->clrText = GetSysColor(COLOR_WINDOWTEXT);
+                    draw->clrTextBk = GetSysColor(COLOR_WINDOW);
                     return CDRF_NEWFONT;
                 }
             }
