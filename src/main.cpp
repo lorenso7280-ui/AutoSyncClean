@@ -2050,10 +2050,13 @@ void LayoutThumbnails(HWND hwnd) {
     static constexpr int widths[]{120, 160, 192};
     static constexpr int heights[]{68, 90, 108};
     const int sizeIndex = std::clamp(g_auxiliarySizeIndex, 0, 2);
-    const int cellWidth = widths[sizeIndex];
-    const int cellHeight = heights[sizeIndex];
     const int contentWidth = std::max(1, static_cast<int>(client.right) - border * 2);
-    const int maxColumns = std::max(1, (contentWidth + gap) / (cellWidth + gap));
+    constexpr int maxColumns = 10;
+    // Keep exactly ten slots per row. The selected auxiliary size is a maximum;
+    // on narrower displays it is scaled down just enough to preserve ten slots.
+    const int fittedWidth = std::max(1, (contentWidth - gap * (maxColumns - 1)) / maxColumns);
+    const int cellWidth = std::min(widths[sizeIndex], fittedWidth);
+    const int cellHeight = std::max(1, std::min(heights[sizeIndex], MulDiv(cellWidth, 9, 16)));
     for (int index = 0; index < count; ++index) {
         auto& item = g_thumbnails[static_cast<size_t>(index)];
         const int column = index % maxColumns;
@@ -2233,9 +2236,10 @@ void ToggleThumbnailViewer() {
     static constexpr int widths[]{120, 160, 192};
     static constexpr int heights[]{68, 90, 108};
     const int sizeIndex = std::clamp(g_auxiliarySizeIndex, 0, 2);
-    const int cellWidth = widths[sizeIndex];
-    const int cellHeight = heights[sizeIndex];
-    const int columns = std::max(1, (workWidth - border * 2 + gap) / (cellWidth + gap));
+    constexpr int columns = 10;
+    const int fittedWidth = std::max(1, (workWidth - border * 2 - gap * (columns - 1)) / columns);
+    const int cellWidth = std::min(widths[sizeIndex], fittedWidth);
+    const int cellHeight = std::max(1, std::min(heights[sizeIndex], MulDiv(cellWidth, 9, 16)));
     const int rows = std::max(1, (onlineCount + columns - 1) / columns);
     const int height = std::min(workHeight,
         titleHeight + border + rows * cellHeight + std::max(0, rows - 1) * gap);
@@ -2803,9 +2807,10 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
         SaveSettingDword(L"DefaultsV64Applied", 1);
     }
     // v65 used literal 320/640-pixel preview cells, which were too large for
-    // a multi-window strip. Migrate once to the compact 160x90 preset.
+    // a multi-window strip. Migrate once to the 192x108 maximum preset; the
+    // viewer still fits exactly ten slots per row.
     if (LoadSettingDword(L"DefaultsV66Applied", 0) == 0) {
-        SaveSettingDword(L"AuxiliarySize", 1);
+        SaveSettingDword(L"AuxiliarySize", 2);
         SaveSettingDword(L"DefaultsV66Applied", 1);
     }
     g_syncFps = std::clamp(static_cast<int>(LoadSettingDword(L"SyncFps", 30)), 1, 60);
@@ -2814,7 +2819,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_arrangeSizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"ArrangeSize", 2)), 0, 5);
     g_lightAffinityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightAffinity", 0)), 0, 2);
     g_lightKeepMainOnly = LoadSettingDword(L"LightKeepMainOnly", 0) != 0;
-    g_auxiliarySizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliarySize", 1)), 0, 2);
+    g_auxiliarySizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliarySize", 2)), 0, 2);
     g_auxiliaryPriorityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliaryPriority", 1)), 0, 1);
     INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
                                          ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
