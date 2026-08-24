@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.62 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.63 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -425,6 +425,23 @@ LPARAM ScaledPoint(HWND target, double nx, double ny) {
     return MAKELPARAM(x, y);
 }
 
+LPARAM MappedPoint(HWND topLevel, HWND target, double nx, double ny) {
+    RECT topClient{};
+    if (!GetClientRect(topLevel, &topClient) || topClient.right <= 0 || topClient.bottom <= 0)
+        return ScaledPoint(target, nx, ny);
+    POINT point{
+        std::clamp(static_cast<int>(nx * topClient.right), 0, std::max(0, static_cast<int>(topClient.right) - 1)),
+        std::clamp(static_cast<int>(ny * topClient.bottom), 0, std::max(0, static_cast<int>(topClient.bottom) - 1))
+    };
+    ClientToScreen(topLevel, &point);
+    ScreenToClient(target, &point);
+    RECT targetClient{};
+    GetClientRect(target, &targetClient);
+    point.x = std::clamp(point.x, 0L, std::max(0L, targetClient.right - 1));
+    point.y = std::clamp(point.y, 0L, std::max(0L, targetClient.bottom - 1));
+    return MAKELPARAM(point.x, point.y);
+}
+
 HWND PointInputTarget(HWND fallback, double nx, double ny) {
     if (!IsWindow(fallback)) return nullptr;
     RECT client{};
@@ -514,8 +531,15 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
     const bool critical = msg != WM_MOUSEMOVE;
     if (g_sync) {
         ForTargets([&](HWND h) {
-            HWND target = InputTarget(h);
-            if (target) DeliverInput(h, msg, wp, ScaledPoint(target, nx, ny), critical);
+            HWND target = PointInputTarget(h, nx, ny);
+            if (!target) target = InputTarget(h);
+            if (!target) return;
+            const LPARAM point = MappedPoint(h, target, nx, ny);
+            // Prime Unity's per-window mouse position without moving the real
+            // system cursor. Queue every target first so checked windows react
+            // in the same message cycle, including minimized light-mode peers.
+            if (critical) PostMessageW(target, WM_MOUSEMOVE, 0, point);
+            PostMessageW(target, msg, wp, point);
         });
     }
     // Do not store cursor movement. Keep button-down and button-up as separate
@@ -1041,7 +1065,7 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             label(L"(FPS)", 326, 136, 50);
             label(L"FPS điều chỉnh tần suất truyền chuyển động chuột; mặc định 30.", 22, 183, 420);
             label(L"Phạm vi hợp lệ: 1 đến 60 FPS.", 22, 207, 350);
-            HWND light = CreateWindowW(L"BUTTON", L"Chế độ nhẹ máy (chỉ giữ Cửa sổ 1)",
+            HWND light = CreateWindowW(L"BUTTON", L"Chế độ nhẹ máy",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 239, 330, 24, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_ENABLE), g_instance, nullptr);
             SendMessageW(light, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
@@ -1586,13 +1610,26 @@ void HandleMenu(int id) {
             SetStatus(L"Đã gửi lệnh đóng " + std::to_wstring(targets.size()) + L" cửa sổ đã chọn.");
             break;
         }
-        case IDM_REMOVE_ONE:
-            if (int row = SelectedIndex(); row >= 0) {
-                if (selected) g_ignored.insert(selected);
-                g_windows.erase(g_windows.begin() + row);
-                RebuildList(); RefreshThumbnailViewer(true);
+        case IDM_REMOVE_ONE: {
+            SyncChecksFromList();
+            std::unordered_set<HWND> targets;
+            for (const auto& window : g_windows)
+                if (window.selected) targets.insert(window.hwnd);
+            if (targets.empty() && selected) targets.insert(selected);
+            if (targets.contains(g_source)) {
+                if (g_sync) SetSync(false);
+                g_source = nullptr;
             }
+            for (HWND target : targets) if (target) g_ignored.insert(target);
+            std::erase_if(g_windows, [&](const WindowItem& window) {
+                return targets.contains(window.hwnd);
+            });
+            RebuildList();
+            RefreshThumbnailViewer(true);
+            SetStatus(L"Đã xóa " + std::to_wstring(targets.size()) +
+                      L" cửa sổ được đánh dấu khỏi danh sách; game vẫn đang chạy.");
             break;
+        }
         case IDM_SELECT_ALL: case IDM_CLEAR_ALL:
             for (int i = 0; i < ListView_GetItemCount(g_list); ++i) ListView_SetCheckState(g_list, i, id == IDM_SELECT_ALL);
             SyncChecksFromList();
