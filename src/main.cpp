@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.60 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.61 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -2002,6 +2002,24 @@ void LayoutThumbnails(HWND hwnd) {
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
+void ReapplyThumbnailDestinations() {
+    // Resizing a source game window must never resize or reflow the preview
+    // cells. Reapply only the destinations already calculated by the viewer;
+    // do not call LayoutThumbnails or rebuild the thumbnail collection here.
+    for (auto& item : g_thumbnails) {
+        if (!item.handle || IsRectEmpty(&item.destination)) continue;
+        DWM_THUMBNAIL_PROPERTIES properties{};
+        properties.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
+                             DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
+        properties.rcDestination = item.destination;
+        properties.fVisible = TRUE;
+        properties.opacity = 255;
+        properties.fSourceClientAreaOnly = FALSE;
+        DwmUpdateThumbnailProperties(item.handle, &properties);
+    }
+    if (g_thumbnailViewer) InvalidateRect(g_thumbnailViewer, nullptr, FALSE);
+}
+
 bool ThumbnailSourcesChanged() {
     std::vector<HWND> online;
     for (const auto& window : g_windows) if (IsWindow(window.hwnd)) online.push_back(window.hwnd);
@@ -2678,6 +2696,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_APP + 3: {
             std::unique_ptr<ArrangeResult> result(reinterpret_cast<ArrangeResult*>(wp));
             if (!result) return 0;
+            ReapplyThumbnailDestinations();
             SetStatus(L"Đã xếp chồng " + std::to_wstring(result->succeeded) + L"/" +
                       std::to_wstring(result->total) + L" cửa sổ game.");
             if (result->succeeded != result->total)
