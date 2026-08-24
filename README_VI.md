@@ -1,4 +1,4 @@
-# AutoSync Clean v.66
+# AutoSync Clean v.67
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -36,6 +36,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Cửa sổ chính khởi động ở kích thước 605×454 pixel giống khung 360Auto tham chiếu; thanh tiêu đề dùng màu xanh và vẫn có thể kéo cạnh để thay đổi kích thước.
 - Thanh dưới có nhãn tác giả **Nguyễn Đức Lộc** chữ trắng trên nền xanh lá.
 - Thanh xem trước hiển thị tối đa 10 cửa sổ trên mỗi hàng và tự thêm hàng khi có nhiều hơn 10 cửa sổ.
+- Có thể giữ chuột và kéo một ô trong thanh cửa sổ phụ sang vị trí khác. Khi bấm **Sắp xếp cửa sổ**, danh sách và tiêu đề game được đánh lại từ trên xuống dưới thành `Cửa sổ 1`, `Cửa sổ 2`… theo đúng thứ tự mới; cửa sổ nguồn đã chọn vẫn được giữ theo HWND.
 - Sắp xếp/resize và thanh cửa sổ thu nhỏ luôn áp dụng cho toàn bộ cửa sổ game `ONLINE`, không cần tích checkbox; checkbox chỉ quyết định cửa sổ nhận thao tác đồng bộ.
 - Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
 - Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
@@ -71,7 +72,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chế độ nhẹ máy có thể chỉ giữ cửa sổ chính hiển thị; các cửa sổ phụ chỉ minimize và vẫn nhận đồng bộ nếu đang Online và được checkbox.
 - Đồng bộ chuột ánh xạ tọa độ đến đúng render/control HWND của từng cửa sổ và gửi vị trí ảo trước sự kiện nút chuột, không di chuyển con trỏ thật.
 - Từ v64, **Chế độ nhẹ máy** và **Chỉ giữ cửa sổ chính hiển thị** mặc định đều không được đánh dấu. Máy nâng cấp từ bản cũ cũng được đặt lại hai tùy chọn này một lần.
-- Tên file chạy trong gói v66 là **AutoSyncClean v.66.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
+- Tên file chạy trong gói v67 là **AutoSyncClean v.67.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
 
 ## Cửa sổ chính và cửa sổ phụ
 
