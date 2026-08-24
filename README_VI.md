@@ -1,4 +1,4 @@
-# AutoSync Clean v.58
+# AutoSync Clean v.59
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -61,6 +61,8 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - **Chế độ nhẹ máy (chỉ giữ Cửa sổ 1)** dành cho cấu hình chạy nhiều cửa sổ, với bốn kích thước `320×180`, `480×270`, `640×360` và `960×540`. Kích thước mặc định là `640×360`; lựa chọn chế độ, kích thước và CPU affinity đều được ghi nhớ cho lần mở sau.
 - Khi bật Chế độ nhẹ máy, chương trình chỉ resize và hạ tiến trình game phụ xuống mức ưu tiên CPU **Below normal**, không tự đóng hay thu nhỏ cửa sổ.
 - Tùy chọn riêng **Chỉ giữ cửa sổ chính hiển thị** sẽ thu nhỏ mọi cửa sổ phụ nhưng không thoát game, giúp người dùng chỉ nhìn và thao tác trên cửa sổ chính khi đang bật đồng bộ. Bỏ tùy chọn này sẽ khôi phục các cửa sổ phụ ngay trong khi Chế độ nhẹ máy vẫn chạy.
+- Chọn nhanh checkbox: bấm một dòng, giữ **Shift** và bấm dòng cuối của dải; tất cả các dòng đang được bôi xanh sẽ tự động được tích.
+- Bấm tiêu đề cột **#** để tích toàn bộ cửa sổ; bấm lần nữa để bỏ tích toàn bộ.
 - Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
 - Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
 - Khi tắt Chế độ nhẹ máy hoặc thoát AutoSync Clean, chương trình khôi phục vị trí/trạng thái cửa sổ, mức ưu tiên CPU và affinity đã có trước lúc bật chế độ.
