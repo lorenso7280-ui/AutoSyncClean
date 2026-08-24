@@ -1,4 +1,4 @@
-# AutoSync Clean
+# AutoSync Clean v.58
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -58,7 +58,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Khi không bật chế độ máy ảo, phát lại vẫn dùng thông điệp nền và không di chuyển hoặc khóa con trỏ thật.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, mặc định 30 FPS ở lần chạy đầu. Phần mềm lưu giá trị FPS và trạng thái bật/tắt vào thiết lập người dùng Windows, nên đóng rồi mở lại vẫn giữ lựa chọn gần nhất. Giá trị này chỉ điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
-- **Chế độ nhẹ máy** dành cho cấu hình chạy nhiều cửa sổ, với bốn kích thước `320×180`, `480×270`, `640×360` và `960×540`. Kích thước mặc định là `640×360`; lựa chọn chế độ, kích thước và CPU affinity đều được ghi nhớ cho lần mở sau.
+- **Chế độ nhẹ máy (chỉ giữ Cửa sổ 1)** dành cho cấu hình chạy nhiều cửa sổ, với bốn kích thước `320×180`, `480×270`, `640×360` và `960×540`. Kích thước mặc định là `640×360`; lựa chọn chế độ, kích thước và CPU affinity đều được ghi nhớ cho lần mở sau.
 - Khi bật Chế độ nhẹ máy, chương trình chỉ resize và hạ tiến trình game phụ xuống mức ưu tiên CPU **Below normal**, không tự đóng hay thu nhỏ cửa sổ.
 - Tùy chọn riêng **Chỉ giữ cửa sổ chính hiển thị** sẽ thu nhỏ mọi cửa sổ phụ nhưng không thoát game, giúp người dùng chỉ nhìn và thao tác trên cửa sổ chính khi đang bật đồng bộ. Bỏ tùy chọn này sẽ khôi phục các cửa sổ phụ ngay trong khi Chế độ nhẹ máy vẫn chạy.
 - Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
