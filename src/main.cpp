@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.66 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.67 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -119,6 +119,8 @@ int g_lightAffinityIndex{};
 bool g_lightKeepMainOnly{};
 int g_auxiliarySizeIndex{};
 int g_auxiliaryPriorityIndex{1};
+int g_thumbnailDragIndex{-1};
+bool g_thumbnailDragMoved{};
 bool g_bulkChecking{};
 int g_arrangeSizeIndex{2};
 int g_playRepeat{1}, g_playGapSeconds{1};
@@ -137,6 +139,7 @@ constexpr ULONG_PTR kAutoSyncInputTag = static_cast<ULONG_PTR>(0x4153434C45414E3
 void SyncChecksFromList();
 void RefreshWindows(bool clearIgnored);
 void RefreshThumbnailViewer(bool force);
+void LayoutThumbnails(HWND hwnd);
 std::wstring ExecutablePath(HWND hwnd);
 void ApplyLightweightMode();
 void SetLightweightMode(bool enabled);
@@ -2011,6 +2014,13 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void ShowArranger() {
+    // The visual order of the preview cells is the order requested by the
+    // user. Commit that order to both the list and the real game captions
+    // before opening the arrange dialog. The designated source is stored as
+    // an HWND, so it remains the source even when its row number changes.
+    RenameWindowsSequentially();
+    if (g_thumbnailViewer) LayoutThumbnails(g_thumbnailViewer);
+    SetStatus(L"Đã đánh lại thứ tự Cửa sổ 1... theo cửa sổ phụ.");
     if (g_arranger) { ShowWindow(g_arranger, SW_RESTORE); SetForegroundWindow(g_arranger); return; }
     static bool registered = false;
     if (!registered) {
@@ -2092,6 +2102,30 @@ void ReapplyThumbnailDestinations() {
         DwmUpdateThumbnailProperties(item.handle, &properties);
     }
     if (g_thumbnailViewer) InvalidateRect(g_thumbnailViewer, nullptr, FALSE);
+}
+
+int ThumbnailIndexAtPoint(POINT point) {
+    for (int index = 0; index < static_cast<int>(g_thumbnails.size()); ++index) {
+        if (PtInRect(&g_thumbnails[static_cast<size_t>(index)].destination, point)) return index;
+    }
+    return -1;
+}
+
+void SwapThumbnailOrder(int first, int second) {
+    const int count = static_cast<int>(g_thumbnails.size());
+    if (first < 0 || second < 0 || first >= count || second >= count || first == second) return;
+
+    const HWND firstWindow = g_thumbnails[static_cast<size_t>(first)].source;
+    const HWND secondWindow = g_thumbnails[static_cast<size_t>(second)].source;
+    std::swap(g_thumbnails[static_cast<size_t>(first)], g_thumbnails[static_cast<size_t>(second)]);
+
+    const auto firstItem = std::find_if(g_windows.begin(), g_windows.end(),
+        [firstWindow](const WindowItem& item) { return item.hwnd == firstWindow; });
+    const auto secondItem = std::find_if(g_windows.begin(), g_windows.end(),
+        [secondWindow](const WindowItem& item) { return item.hwnd == secondWindow; });
+    if (firstItem != g_windows.end() && secondItem != g_windows.end()) std::iter_swap(firstItem, secondItem);
+
+    LayoutThumbnails(g_thumbnailViewer);
 }
 
 bool ThumbnailSourcesChanged() {
@@ -2179,17 +2213,26 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         }
         case WM_LBUTTONDOWN: {
             POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            for (const auto& item : g_thumbnails) {
-                if (PtInRect(&item.destination, point) && IsWindow(item.source)) {
-                    ShowWindow(item.source, SW_RESTORE);
-                    SetWindowPos(item.source, HWND_TOP, 0, 0, 0, 0,
-                                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                    SetForegroundWindow(item.source);
-                    break;
-                }
+            const int index = ThumbnailIndexAtPoint(point);
+            if (index >= 0) {
+                g_thumbnailDragIndex = index;
+                g_thumbnailDragMoved = false;
+                SetCapture(hwnd);
             }
             return 0;
         }
+        case WM_MOUSEMOVE:
+            if (GetCapture() == hwnd && g_thumbnailDragIndex >= 0 && (wp & MK_LBUTTON)) {
+                POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                const int hoverIndex = ThumbnailIndexAtPoint(point);
+                if (hoverIndex >= 0 && hoverIndex != g_thumbnailDragIndex) {
+                    SwapThumbnailOrder(g_thumbnailDragIndex, hoverIndex);
+                    g_thumbnailDragIndex = hoverIndex;
+                    g_thumbnailDragMoved = true;
+                }
+                return 0;
+            }
+            break;
         case WM_LBUTTONUP: {
             POINT point{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             RECT client{}; GetClientRect(hwnd, &client);
@@ -2199,9 +2242,36 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             if (point.y >= 1 && point.y < 22 && point.x >= client.right - 51) {
                 ShowWindow(hwnd, SW_MINIMIZE); return 0;
             }
+            if (GetCapture() == hwnd && g_thumbnailDragIndex >= 0) {
+                const int index = g_thumbnailDragIndex;
+                const bool moved = g_thumbnailDragMoved;
+                ReleaseCapture();
+                g_thumbnailDragIndex = -1;
+                g_thumbnailDragMoved = false;
+                if (moved) {
+                    SetStatus(L"Đã đổi thứ tự cửa sổ phụ. Bấm Sắp xếp cửa sổ để đánh số lại.");
+                    return 0;
+                }
+                if (index < static_cast<int>(g_thumbnails.size())) {
+                    const HWND source = g_thumbnails[static_cast<size_t>(index)].source;
+                    if (IsWindow(source)) {
+                        ShowWindow(source, SW_RESTORE);
+                        SetWindowPos(source, HWND_TOP, 0, 0, 0, 0,
+                                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                        SetForegroundWindow(source);
+                    }
+                }
+            }
             return 0;
         }
+        case WM_CAPTURECHANGED:
+            g_thumbnailDragIndex = -1;
+            g_thumbnailDragMoved = false;
+            return 0;
         case WM_DESTROY:
+            if (GetCapture() == hwnd) ReleaseCapture();
+            g_thumbnailDragIndex = -1;
+            g_thumbnailDragMoved = false;
             ClearThumbnails();
             g_thumbnailViewer = nullptr;
             return 0;
