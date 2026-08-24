@@ -1,4 +1,4 @@
-# AutoSync Clean v.67
+# AutoSync Clean v.68
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -17,7 +17,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Khi khởi động, danh sách luôn trống. Kéo nút tròn vào một cửa sổ game sẽ nhận diện đường dẫn file tiến trình và tự quét toàn bộ cửa sổ/tab đang chạy từ cùng file game.
 - Việc quét theo tiến trình vẫn hoạt động sau khi tắt hẳn rồi mở lại AutoSync Clean, kể cả khi các thanh tiêu đề game trước đó đã được đổi thành `Cửa sổ 1`, `Cửa sổ 2`…
 - Giữ các cửa sổ đã nhận trong danh sách và tự đổi trạng thái `ONLINE`/`OFFLINE` khi game mở hoặc đóng.
-- Chỉ ô **Trạng thái** được tô màu: nền xanh, chữ trắng cho cửa sổ `Online` (kể cả cửa sổ chính/đang đồng bộ) và nền đỏ, chữ trắng cho cửa sổ `Offline`. Cột **Kích thước** cùng các cột khác luôn giữ nền mặc định.
+- Danh sách có đường lưới xám mảnh và nền hàng xen kẽ nhẹ. Cột **Trạng thái** dùng nhãn bo tròn: xanh nhạt cho `Online`/`Đang đồng bộ`, đỏ nhạt cho `Offline`; cửa sổ nguồn có huy hiệu sao vàng và nhãn xanh `Cửa sổ chính`. Cột **Kích thước** cùng các cột khác giữ nền hàng mặc định.
 - Làm mới trạng thái theo chu kỳ mà không xóa trắng hoặc làm chớp danh sách; vị trí cuộn và dòng đang chọn được giữ nguyên.
 - Kéo biểu tượng tròn bên trái rồi thả vào cửa sổ Doomsday để nhận cửa sổ thủ công.
 - Sau khi nhận cửa sổ đầu tiên, các cửa sổ mới có cùng tiêu đề game sẽ tự động được thêm vào cùng nhóm.
@@ -72,7 +72,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chế độ nhẹ máy có thể chỉ giữ cửa sổ chính hiển thị; các cửa sổ phụ chỉ minimize và vẫn nhận đồng bộ nếu đang Online và được checkbox.
 - Đồng bộ chuột ánh xạ tọa độ đến đúng render/control HWND của từng cửa sổ và gửi vị trí ảo trước sự kiện nút chuột, không di chuyển con trỏ thật.
 - Từ v64, **Chế độ nhẹ máy** và **Chỉ giữ cửa sổ chính hiển thị** mặc định đều không được đánh dấu. Máy nâng cấp từ bản cũ cũng được đặt lại hai tùy chọn này một lần.
-- Tên file chạy trong gói v67 là **AutoSyncClean v.67.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
+- Tên file chạy trong gói v68 là **AutoSyncClean v.68.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
 
 ## Cửa sổ chính và cửa sổ phụ
 
