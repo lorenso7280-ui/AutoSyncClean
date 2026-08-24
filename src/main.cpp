@@ -2642,7 +2642,8 @@ void DrawRoundedLabel(HDC dc, RECT bounds, const std::wstring& text,
                       COLORREF background, COLORREF foreground) {
     SIZE measured{};
     GetTextExtentPoint32W(dc, text.c_str(), static_cast<int>(text.size()), &measured);
-    const int height = std::max(16, std::min(22, bounds.bottom - bounds.top - 4));
+    const int availableHeight = static_cast<int>(bounds.bottom - bounds.top) - 4;
+    const int height = std::max(16, std::min(22, availableHeight));
     const int width = measured.cx + 16;
     RECT badge{bounds.left, bounds.top + (bounds.bottom - bounds.top - height) / 2,
                std::min(bounds.right, bounds.left + width),
