@@ -77,7 +77,7 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 
 - **Cửa sổ chính** là các cửa sổ game thật ở phía trên. Mục **Sắp xếp cửa sổ** tiếp tục thay đổi kích thước và vị trí của nhóm này.
 - **Cửa sổ phụ** là các ô xem trước trong thanh **Xem cửa sổ thu nhỏ** phía dưới.
-- Trong **Thiết lập**, cửa sổ phụ có ba kích thước gọn **120x68**, **160x90** và **192x108**. Mặc định là **160x90**; thay đổi này không resize cửa sổ game thật.
+- Trong **Thiết lập**, cửa sổ phụ có ba kích thước gọn **120x68**, **160x90** và **192x108**. Mặc định là **192x108**; mỗi hàng luôn có tối đa đúng **10 ô** và phần mềm tự co nhẹ nếu màn hình không đủ chiều rộng. Thay đổi này không resize cửa sổ game thật.
 - Tiến trình nền có thể dùng mức ưu tiên **Normal** hoặc **Below normal**; mặc định là **Below normal** khi bật Chế độ nhẹ máy.
 - Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
 - Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
