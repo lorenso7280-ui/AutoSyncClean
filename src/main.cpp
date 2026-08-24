@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean 1.0 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.58 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -1047,7 +1047,7 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             label(L"(FPS)", 326, 136, 50);
             label(L"FPS điều chỉnh tần suất truyền chuyển động chuột; mặc định 30.", 22, 183, 420);
             label(L"Phạm vi hợp lệ: 1 đến 60 FPS.", 22, 207, 350);
-            HWND light = CreateWindowW(L"BUTTON", L"Chế độ nhẹ máy (giảm tải nhiều cửa sổ)",
+            HWND light = CreateWindowW(L"BUTTON", L"Chế độ nhẹ máy (chỉ giữ Cửa sổ 1)",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 239, 330, 24, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_ENABLE), g_instance, nullptr);
             SendMessageW(light, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
@@ -2334,6 +2334,17 @@ void DrawMainCaption(HWND hwnd, HDC dc) {
     MoveToEx(dc, client.right - 11, 10, nullptr); LineTo(dc, client.right - 25, 23);
     SelectObject(dc, oldBrush);
     SelectObject(dc, oldPen); DeleteObject(whitePen);
+
+    // One-pixel blue frame around the whole application. Keep it in the same
+    // client-drawn surface as the caption so Windows never adds a second
+    // native border/title bar.
+    HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(45, 137, 218));
+    oldPen = SelectObject(dc, borderPen);
+    oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    Rectangle(dc, 0, 0, std::max(1L, client.right), std::max(1L, client.bottom));
+    SelectObject(dc, oldBrush);
+    SelectObject(dc, oldPen);
+    DeleteObject(borderPen);
 }
 
 LRESULT MainHitTest(HWND hwnd, LPARAM lp) {
