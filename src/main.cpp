@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.61 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.62 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -66,6 +66,7 @@ struct ThumbnailItem {
     HWND source{};
     HTHUMBNAIL handle{};
     RECT destination{};
+    HBITMAP snapshot{};
 };
 
 enum class MacroType { KeyDown, KeyUp, MouseMove, MouseDown, MouseUp, MouseClick, Wheel };
@@ -134,6 +135,7 @@ constexpr ULONG_PTR kAutoSyncInputTag = static_cast<ULONG_PTR>(0x4153434C45414E3
 void SyncChecksFromList();
 void RefreshWindows(bool clearIgnored);
 void RefreshThumbnailViewer(bool force);
+void FreezeThumbnailSnapshots();
 std::wstring ExecutablePath(HWND hwnd);
 void ApplyLightweightMode();
 void SetLightweightMode(bool enabled);
@@ -1925,6 +1927,10 @@ LRESULT CALLBACK ArrangerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 request.offsetX = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_X).c_str()), 0, 2000);
                 request.offsetY = std::clamp(_wtoi(ControlText(hwnd, IDC_ARRANGE_OFFSET_Y).c_str()), 0, 2000);
                 request.keepSize = Button_GetCheck(GetDlgItem(hwnd, IDC_ARRANGE_KEEP_SIZE)) == BST_CHECKED;
+                // Preserve exactly what the user currently sees in the preview
+                // strip. DWM thumbnails are live views of the source HWND and
+                // otherwise redraw when the game is resized.
+                FreezeThumbnailSnapshots();
                 if (!StartArrangeOverlapped(request)) {
                     MessageBoxW(hwnd, L"Không có cửa sổ game ONLINE hoặc không thể tạo tác vụ sắp xếp.",
                                 kTitle, MB_ICONINFORMATION);
@@ -1955,9 +1961,54 @@ void ShowArranger() {
 }
 
 void ClearThumbnails() {
-    for (auto& item : g_thumbnails)
+    for (auto& item : g_thumbnails) {
         if (item.handle) DwmUnregisterThumbnail(item.handle);
+        if (item.snapshot) DeleteObject(item.snapshot);
+    }
     g_thumbnails.clear();
+}
+
+HBITMAP CaptureThumbnailSnapshot(HWND source) {
+    RECT window{};
+    if (!IsWindow(source) || !GetWindowRect(source, &window)) return nullptr;
+    const int width = std::max(1L, window.right - window.left);
+    const int height = std::max(1L, window.bottom - window.top);
+    HDC screen = GetDC(nullptr);
+    HDC memory = CreateCompatibleDC(screen);
+    HBITMAP bitmap = CreateCompatibleBitmap(screen, width, height);
+    HGDIOBJ previous = SelectObject(memory, bitmap);
+    BOOL captured = PrintWindow(source, memory, 0x00000002); // PW_RENDERFULLCONTENT
+    if (!captured) {
+        HDC sourceDc = GetWindowDC(source);
+        captured = BitBlt(memory, 0, 0, width, height, sourceDc, 0, 0, SRCCOPY | CAPTUREBLT);
+        ReleaseDC(source, sourceDc);
+    }
+    SelectObject(memory, previous);
+    DeleteDC(memory);
+    ReleaseDC(nullptr, screen);
+    if (!captured) {
+        DeleteObject(bitmap);
+        return nullptr;
+    }
+    return bitmap;
+}
+
+void FreezeThumbnailSnapshots() {
+    if (!g_thumbnailViewer || !IsWindowVisible(g_thumbnailViewer)) return;
+    for (auto& item : g_thumbnails) {
+        if (item.snapshot) {
+            DeleteObject(item.snapshot);
+            item.snapshot = nullptr;
+        }
+        item.snapshot = CaptureThumbnailSnapshot(item.source);
+        if (item.handle && item.snapshot) {
+            DWM_THUMBNAIL_PROPERTIES properties{};
+            properties.dwFlags = DWM_TNP_VISIBLE;
+            properties.fVisible = FALSE;
+            DwmUpdateThumbnailProperties(item.handle, &properties);
+        }
+    }
+    InvalidateRect(g_thumbnailViewer, nullptr, FALSE);
 }
 
 void SetThumbnailRendering(bool visible) {
@@ -1965,7 +2016,7 @@ void SetThumbnailRendering(bool visible) {
         if (!item.handle) continue;
         DWM_THUMBNAIL_PROPERTIES properties{};
         properties.dwFlags = DWM_TNP_VISIBLE;
-        properties.fVisible = visible ? TRUE : FALSE;
+        properties.fVisible = (visible && !item.snapshot) ? TRUE : FALSE;
         DwmUpdateThumbnailProperties(item.handle, &properties);
     }
 }
@@ -1994,7 +2045,7 @@ void LayoutThumbnails(HWND hwnd) {
         properties.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
                              DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
         properties.rcDestination = item.destination;
-        properties.fVisible = TRUE;
+        properties.fVisible = item.snapshot ? FALSE : TRUE;
         properties.opacity = 255;
         properties.fSourceClientAreaOnly = FALSE;
         DwmUpdateThumbnailProperties(item.handle, &properties);
@@ -2012,7 +2063,7 @@ void ReapplyThumbnailDestinations() {
         properties.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE |
                              DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
         properties.rcDestination = item.destination;
-        properties.fVisible = TRUE;
+        properties.fVisible = item.snapshot ? FALSE : TRUE;
         properties.opacity = 255;
         properties.fSourceClientAreaOnly = FALSE;
         DwmUpdateThumbnailProperties(item.handle, &properties);
@@ -2037,7 +2088,7 @@ void RefreshThumbnailViewer(bool force = false) {
         if (!IsWindow(window.hwnd)) continue;
         HTHUMBNAIL thumbnail{};
         if (SUCCEEDED(DwmRegisterThumbnail(g_thumbnailViewer, window.hwnd, &thumbnail)))
-            g_thumbnails.push_back({window.hwnd, thumbnail, {}});
+            g_thumbnails.push_back({window.hwnd, thumbnail, {}, nullptr});
     }
     LayoutThumbnails(g_thumbnailViewer);
 }
@@ -2084,6 +2135,20 @@ LRESULT CALLBACK ThumbnailViewerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             DrawTextW(dc, L"−", -1, &minimize, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             DrawTextW(dc, L"×", -1, &close, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(dc, oldFont);
+            SetStretchBltMode(dc, HALFTONE);
+            for (const auto& item : g_thumbnails) {
+                if (!item.snapshot || IsRectEmpty(&item.destination)) continue;
+                BITMAP info{};
+                if (!GetObjectW(item.snapshot, sizeof(info), &info)) continue;
+                HDC sourceDc = CreateCompatibleDC(dc);
+                HGDIOBJ previousBitmap = SelectObject(sourceDc, item.snapshot);
+                StretchBlt(dc, item.destination.left, item.destination.top,
+                           item.destination.right - item.destination.left,
+                           item.destination.bottom - item.destination.top,
+                           sourceDc, 0, 0, info.bmWidth, info.bmHeight, SRCCOPY);
+                SelectObject(sourceDc, previousBitmap);
+                DeleteDC(sourceDc);
+            }
             EndPaint(hwnd, &paint);
             return 0;
         }
