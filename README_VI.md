@@ -57,8 +57,9 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Khi không bật chế độ máy ảo, phát lại vẫn dùng thông điệp nền và không di chuyển hoặc khóa con trỏ thật.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, mặc định 30 FPS ở lần chạy đầu. Phần mềm lưu giá trị FPS và trạng thái bật/tắt vào thiết lập người dùng Windows, nên đóng rồi mở lại vẫn giữ lựa chọn gần nhất. Giá trị này chỉ điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
-- **Chế độ nhẹ máy** dành cho cấu hình chạy nhiều cửa sổ, với ba kích thước `480×270`, `640×360` và `960×540`. Kích thước mặc định là `640×360`; lựa chọn chế độ, kích thước và CPU affinity đều được ghi nhớ cho lần mở sau.
-- Khi bật Chế độ nhẹ máy, cửa sổ chính vẫn mở để thao tác; mọi cửa sổ game phụ được thu nhỏ và tiến trình phụ được hạ xuống mức ưu tiên CPU **Below normal**.
+- **Chế độ nhẹ máy** dành cho cấu hình chạy nhiều cửa sổ, với bốn kích thước `320×180`, `480×270`, `640×360` và `960×540`. Kích thước mặc định là `640×360`; lựa chọn chế độ, kích thước và CPU affinity đều được ghi nhớ cho lần mở sau.
+- Khi bật Chế độ nhẹ máy, chương trình chỉ resize và hạ tiến trình game phụ xuống mức ưu tiên CPU **Below normal**, không tự đóng hay thu nhỏ cửa sổ.
+- Tùy chọn riêng **Chỉ giữ cửa sổ chính hiển thị** sẽ thu nhỏ mọi cửa sổ phụ nhưng không thoát game, giúp người dùng chỉ nhìn và thao tác trên cửa sổ chính khi đang bật đồng bộ. Bỏ tùy chọn này sẽ khôi phục các cửa sổ phụ ngay trong khi Chế độ nhẹ máy vẫn chạy.
 - Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
 - Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
 - Khi tắt Chế độ nhẹ máy hoặc thoát AutoSync Clean, chương trình khôi phục vị trí/trạng thái cửa sổ, mức ưu tiên CPU và affinity đã có trước lúc bật chế độ.
@@ -122,7 +123,7 @@ Nút Proxy `◉` giải thích và dẫn người dùng tới phương thức c�
 ### Xếp chồng và di chuyển cửa sổ
 
 1. Bấm nút biểu tượng lưới ở góc trên bên phải. Tất cả cửa sổ game `ONLINE` sẽ được áp dụng, không cần đánh dấu checkbox.
-2. Chọn kích thước toàn bộ cửa sổ game trong danh sách xổ xuống: `960×540`, `1280×720`, `1600×900` hoặc `1920×1080`, sắp từ nhỏ đến lớn. Mặc định là `960×540`; kích thước bao gồm cả thanh tiêu đề và đường viền, giống cách phần mềm mẫu đo và hiển thị.
+2. Chọn kích thước toàn bộ cửa sổ game trong danh sách xổ xuống: `320×180`, `640×360`, `960×540`, `1280×720`, `1600×900` hoặc `1920×1080`, sắp từ nhỏ đến lớn. Mặc định là `960×540`; kích thước bao gồm cả thanh tiêu đề và đường viền, giống cách phần mềm mẫu đo và hiển thị.
 3. Đặt độ lệch mỗi cửa sổ `X = 0`, `Y = 0` để các cửa sổ chồng khít và nhìn như một cửa sổ duy nhất.
 4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
 5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
@@ -147,9 +148,9 @@ Lệnh **Xóa tất cả** chỉ làm trống danh sách quản lý và thanh th
 ### Chế độ nhẹ máy cho 30–60–90 cửa sổ
 
 1. Chọn một cửa sổ làm **Cửa sổ chính**. Đây là cửa sổ duy nhất được giữ mở khi chế độ bắt đầu.
-2. Mở **Thiết lập**, tích **Chế độ nhẹ máy**, rồi chọn `480×270`, `640×360` hoặc `960×540`.
+2. Mở **Thiết lập**, tích **Chế độ nhẹ máy**, rồi chọn `320×180`, `480×270`, `640×360` hoặc `960×540`.
 3. Để **Không giới hạn affinity** nếu chưa đo tải thực tế. Tùy chọn 75% hoặc 50% chỉ nên dùng khi máy có nhiều lõi và cần dành tài nguyên cho tác vụ khác; không nên giới hạn thấp hơn nữa khi chạy hàng chục tiến trình.
-4. Mọi cửa sổ game phụ được resize rồi minimize, còn tiến trình phụ chạy ở mức **Below normal**. Cửa sổ chính vẫn ở kích thước đã chọn và sẵn sàng thao tác.
+4. Mọi cửa sổ game được resize, còn tiến trình phụ chạy ở mức **Below normal**. Nếu muốn chỉ thao tác trên một cửa sổ, chọn **Chỉ giữ cửa sổ chính hiển thị**; các cửa sổ phụ chỉ bị minimize và vẫn chạy nền.
 5. Bỏ tích **Chế độ nhẹ máy** để khôi phục tất cả cửa sổ cùng priority/affinity ban đầu.
 
 Chế độ này giảm tải bằng quản lý cửa sổ, thumbnail và lịch CPU của Windows. Nó không thay đổi chất lượng texture, hiệu ứng hoặc FPS render thực bên trong Unity. Muốn giảm sâu hơn cần dùng thiết lập đồ họa chính thức của game cho từng tài khoản. Số lượng 30, 60 hay 90 cửa sổ có chạy ổn hay không vẫn phụ thuộc CPU, RAM, VRAM, driver và giới hạn đa phiên của game.
