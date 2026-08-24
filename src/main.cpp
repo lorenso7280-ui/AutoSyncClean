@@ -101,6 +101,7 @@ std::wstring g_trackedExePath;
 std::wstring g_lastRenderedListSignature;
 int g_activeRecording{-1};
 int g_syncFps{30};
+bool g_syncFpsEnabled{true};
 int g_playRepeat{1}, g_playGapSeconds{1};
 bool g_vmPlaybackMode{};
 HWND g_source{};
@@ -484,7 +485,8 @@ void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
     if (msg == WM_MOUSEMOVE && g_blockMove) return;
     if (msg == WM_MOUSEMOVE) {
         ULONGLONG now = GetTickCount64();
-        const ULONGLONG interval = static_cast<ULONGLONG>(std::max(1, 1000 / std::clamp(g_syncFps, 1, 60)));
+        const int effectiveFps = g_syncFpsEnabled ? g_syncFps : 30;
+        const ULONGLONG interval = static_cast<ULONGLONG>(std::max(1, 1000 / std::clamp(effectiveFps, 1, 60)));
         if (now - g_lastMouseMoveBroadcast < interval) return;
         g_lastMouseMoveBroadcast = now;
     }
@@ -888,14 +890,15 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 99, 150, 24, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_FPS_ENABLE), g_instance, nullptr);
             SendMessageW(enable, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
-            Button_SetCheck(enable, BST_CHECKED);
+            Button_SetCheck(enable, g_syncFpsEnabled ? BST_CHECKED : BST_UNCHECKED);
             HWND slider = CreateWindowW(TRACKBAR_CLASSW, L"", WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
                 56, 130, 210, 35, hwnd, reinterpret_cast<HMENU>(IDC_SETTINGS_FPS_SLIDER), g_instance, nullptr);
             SendMessageW(slider, TBM_SETRANGE, TRUE, MAKELPARAM(1, 60));
             SendMessageW(slider, TBM_SETTICFREQ, 5, 0);
-            SendMessageW(slider, TBM_SETPOS, TRUE, 30);
-            g_syncFps = 30;
-            HWND value = CreateWindowW(L"STATIC", L"30", WS_CHILD | WS_VISIBLE | SS_CENTER,
+            SendMessageW(slider, TBM_SETPOS, TRUE, g_syncFps);
+            EnableWindow(slider, g_syncFpsEnabled);
+            const std::wstring fpsText = std::to_wstring(g_syncFps);
+            HWND value = CreateWindowW(L"STATIC", fpsText.c_str(), WS_CHILD | WS_VISIBLE | SS_CENTER,
                 278, 136, 42, 22, hwnd, reinterpret_cast<HMENU>(IDC_SETTINGS_FPS_VALUE), g_instance, nullptr);
             SendMessageW(value, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
             label(L"(FPS)", 326, 136, 50);
@@ -907,6 +910,7 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (reinterpret_cast<HWND>(lp) == GetDlgItem(hwnd, IDC_SETTINGS_FPS_SLIDER)) {
                 int fps = static_cast<int>(SendMessageW(reinterpret_cast<HWND>(lp), TBM_GETPOS, 0, 0));
                 g_syncFps = std::clamp(fps, 1, 60);
+                SaveSettingDword(L"SyncFps", static_cast<DWORD>(g_syncFps));
                 SetWindowTextW(GetDlgItem(hwnd, IDC_SETTINGS_FPS_VALUE), std::to_wstring(g_syncFps).c_str());
                 SetStatus(L"FPS đồng bộ: " + std::to_wstring(g_syncFps));
             }
@@ -914,8 +918,10 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND:
             if (LOWORD(wp) == IDC_SETTINGS_FPS_ENABLE) {
                 const bool enabled = Button_GetCheck(GetDlgItem(hwnd, IDC_SETTINGS_FPS_ENABLE)) == BST_CHECKED;
+                g_syncFpsEnabled = enabled;
+                SaveSettingDword(L"SyncFpsEnabled", enabled ? 1 : 0);
                 EnableWindow(GetDlgItem(hwnd, IDC_SETTINGS_FPS_SLIDER), enabled);
-                if (!enabled) g_syncFps = 30;
+                SetStatus(L"FPS đồng bộ: " + std::to_wstring(enabled ? g_syncFps : 30));
             }
             return 0;
         case WM_DESTROY: g_settingsWindow = nullptr; return 0;
@@ -2395,6 +2401,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_instance = instance;
+    g_syncFps = std::clamp(static_cast<int>(LoadSettingDword(L"SyncFps", 30)), 1, 60);
+    g_syncFpsEnabled = LoadSettingDword(L"SyncFpsEnabled", 1) != 0;
     INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
                                          ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
