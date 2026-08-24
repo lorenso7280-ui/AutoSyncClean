@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.58 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.59 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -117,6 +117,7 @@ bool g_lightMode{};
 int g_lightSizeIndex{2};
 int g_lightAffinityIndex{};
 bool g_lightKeepMainOnly{};
+bool g_bulkChecking{};
 int g_playRepeat{1}, g_playGapSeconds{1};
 bool g_vmPlaybackMode{};
 HWND g_source{};
@@ -2557,6 +2558,45 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_NOTIFY: {
             auto* n = reinterpret_cast<NMHDR*>(lp);
+            if (n->hwndFrom == ListView_GetHeader(g_list) &&
+                (n->code == HDN_ITEMCLICKW || n->code == HDN_ITEMCLICKA)) {
+                const auto* header = reinterpret_cast<NMHEADERW*>(lp);
+                if (header->iItem == 0 && !g_bulkChecking) {
+                    const int count = ListView_GetItemCount(g_list);
+                    bool allChecked = count > 0;
+                    for (int i = 0; i < count; ++i) {
+                        if (!ListView_GetCheckState(g_list, i)) {
+                            allChecked = false;
+                            break;
+                        }
+                    }
+                    g_bulkChecking = true;
+                    for (int i = 0; i < count; ++i)
+                        ListView_SetCheckState(g_list, i, !allChecked);
+                    g_bulkChecking = false;
+                    SyncChecksFromList();
+                    SetStatus(allChecked ? L"Đã bỏ chọn tất cả cửa sổ."
+                                         : L"Đã chọn tất cả cửa sổ.");
+                    return 0;
+                }
+            }
+            if (n->idFrom == IDC_LIST && n->code == LVN_ITEMCHANGED &&
+                !g_bulkChecking && (GetKeyState(VK_SHIFT) & 0x8000)) {
+                const auto* changed = reinterpret_cast<NMLISTVIEW*>(lp);
+                const bool becameSelected =
+                    (changed->uChanged & LVIF_STATE) &&
+                    !(changed->uOldState & LVIS_SELECTED) &&
+                    (changed->uNewState & LVIS_SELECTED);
+                if (becameSelected) {
+                    g_bulkChecking = true;
+                    int row = -1;
+                    while ((row = ListView_GetNextItem(g_list, row, LVNI_SELECTED)) != -1)
+                        ListView_SetCheckState(g_list, row, TRUE);
+                    g_bulkChecking = false;
+                    SyncChecksFromList();
+                    SetStatus(L"Đã tích các cửa sổ trong dải đang chọn.");
+                }
+            }
             if (n->idFrom == IDC_LIST && n->code == NM_CUSTOMDRAW) {
                 auto* draw = reinterpret_cast<NMLVCUSTOMDRAW*>(lp);
                 if (draw->nmcd.dwDrawStage == CDDS_PREPAINT)
