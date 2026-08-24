@@ -57,6 +57,11 @@ Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt ch
 - Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Khi không bật chế độ máy ảo, phát lại vẫn dùng thông điệp nền và không di chuyển hoặc khóa con trỏ thật.
 - Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
 - Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, mặc định 30 FPS ở lần chạy đầu. Phần mềm lưu giá trị FPS và trạng thái bật/tắt vào thiết lập người dùng Windows, nên đóng rồi mở lại vẫn giữ lựa chọn gần nhất. Giá trị này chỉ điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
+- **Chế độ nhẹ máy** dành cho cấu hình chạy nhiều cửa sổ, với ba kích thước `480×270`, `640×360` và `960×540`. Kích thước mặc định là `640×360`; lựa chọn chế độ, kích thước và CPU affinity đều được ghi nhớ cho lần mở sau.
+- Khi bật Chế độ nhẹ máy, cửa sổ chính vẫn mở để thao tác; mọi cửa sổ game phụ được thu nhỏ và tiến trình phụ được hạ xuống mức ưu tiên CPU **Below normal**.
+- Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
+- Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
+- Khi tắt Chế độ nhẹ máy hoặc thoát AutoSync Clean, chương trình khôi phục vị trí/trạng thái cửa sổ, mức ưu tiên CPU và affinity đã có trước lúc bật chế độ.
 - Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
 - **Đóng tất cả** áp dụng cho mọi cửa sổ game `ONLINE`, bao gồm cửa sổ chính và không phụ thuộc checkbox. Phần mềm gửi lệnh đóng đồng thời, chờ 300 ms rồi buộc kết thúc đúng các tiến trình game vẫn không phản hồi; lệnh này tự tắt đồng bộ trước và có thể làm mất dữ liệu game chưa lưu.
 - **Hiện tất cả** tiếp tục áp dụng cho những dòng đã tích checkbox.
@@ -138,6 +143,16 @@ Khi dùng lệnh thu nhỏ tất cả của Windows, AutoSync Clean vẫn giữ 
 Mỗi lần mở thanh thu nhỏ, danh sách được giữ nguyên thứ tự hiện tại và đánh số lại `Cửa sổ 1`, `Cửa sổ 2`… Các cửa sổ `ONLINE` được đổi luôn tiêu đề Windows, vì vậy tên trên thumbnail cũng đúng thứ tự. Dòng `OFFLINE` có thể nhấp phải và chọn **Xóa khỏi danh sách**; sau khi xóa, mở lại thanh thu nhỏ để đánh số liên tục từ đầu.
 
 Lệnh **Xóa tất cả** chỉ làm trống danh sách quản lý và thanh thumbnail, không gửi lệnh đóng và không kết thúc bất kỳ game nào. Sau đó giữ nút **Kéo thả target vào cửa sổ game** và thả vào một game đang chạy: phần mềm xóa danh sách bỏ qua cũ, quét lại theo đúng đường dẫn tiến trình và nhận lại toàn bộ cửa sổ cùng game, kể cả cửa sổ đang minimize/ẩn; thanh thumbnail được dựng lại đầy đủ theo danh sách mới.
+
+### Chế độ nhẹ máy cho 30–60–90 cửa sổ
+
+1. Chọn một cửa sổ làm **Cửa sổ chính**. Đây là cửa sổ duy nhất được giữ mở khi chế độ bắt đầu.
+2. Mở **Thiết lập**, tích **Chế độ nhẹ máy**, rồi chọn `480×270`, `640×360` hoặc `960×540`.
+3. Để **Không giới hạn affinity** nếu chưa đo tải thực tế. Tùy chọn 75% hoặc 50% chỉ nên dùng khi máy có nhiều lõi và cần dành tài nguyên cho tác vụ khác; không nên giới hạn thấp hơn nữa khi chạy hàng chục tiến trình.
+4. Mọi cửa sổ game phụ được resize rồi minimize, còn tiến trình phụ chạy ở mức **Below normal**. Cửa sổ chính vẫn ở kích thước đã chọn và sẵn sàng thao tác.
+5. Bỏ tích **Chế độ nhẹ máy** để khôi phục tất cả cửa sổ cùng priority/affinity ban đầu.
+
+Chế độ này giảm tải bằng quản lý cửa sổ, thumbnail và lịch CPU của Windows. Nó không thay đổi chất lượng texture, hiệu ứng hoặc FPS render thực bên trong Unity. Muốn giảm sâu hơn cần dùng thiết lập đồ họa chính thức của game cho từng tài khoản. Số lượng 30, 60 hay 90 cửa sổ có chạy ổn hay không vẫn phụ thuộc CPU, RAM, VRAM, driver và giới hạn đa phiên của game.
 
 ## Giới hạn kỹ thuật
 
