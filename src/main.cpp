@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.65 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.66 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -1079,9 +1079,10 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 CBS_DROPDOWNLIST, 151, 296, 175, 90, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_SIZE), g_instance, nullptr);
             SendMessageW(auxiliarySize, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
-            ComboBox_AddString(auxiliarySize, L"320x180");
-            ComboBox_AddString(auxiliarySize, L"640x360");
-            ComboBox_SetCurSel(auxiliarySize, std::clamp(g_auxiliarySizeIndex, 0, 1));
+            ComboBox_AddString(auxiliarySize, L"120x68");
+            ComboBox_AddString(auxiliarySize, L"160x90");
+            ComboBox_AddString(auxiliarySize, L"192x108");
+            ComboBox_SetCurSel(auxiliarySize, std::clamp(g_auxiliarySizeIndex, 0, 2));
             label(L"Ưu tiên tiến trình:", 22, 332, 125);
             HWND auxiliaryPriority = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                 CBS_DROPDOWNLIST, 151, 328, 175, 90, hwnd,
@@ -1131,7 +1132,7 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (LOWORD(wp) == IDC_SETTINGS_LIGHT_SIZE && HIWORD(wp) == CBN_SELCHANGE) {
                 int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_SIZE));
-                g_auxiliarySizeIndex = std::clamp(index == CB_ERR ? 0 : index, 0, 1);
+                g_auxiliarySizeIndex = std::clamp(index == CB_ERR ? 1 : index, 0, 2);
                 SaveSettingDword(L"AuxiliarySize", static_cast<DWORD>(g_auxiliarySizeIndex));
                 if (g_thumbnailViewer) LayoutThumbnails(g_thumbnailViewer);
             }
@@ -2046,8 +2047,11 @@ void LayoutThumbnails(HWND hwnd) {
     const int count = static_cast<int>(g_thumbnails.size());
     if (!count || client.right <= 0 || client.bottom <= 0) return;
     constexpr int border = 1, titleHeight = 22, gap = 2;
-    const int cellWidth = g_auxiliarySizeIndex == 0 ? 320 : 640;
-    const int cellHeight = g_auxiliarySizeIndex == 0 ? 180 : 360;
+    static constexpr int widths[]{120, 160, 192};
+    static constexpr int heights[]{68, 90, 108};
+    const int sizeIndex = std::clamp(g_auxiliarySizeIndex, 0, 2);
+    const int cellWidth = widths[sizeIndex];
+    const int cellHeight = heights[sizeIndex];
     const int contentWidth = std::max(1, static_cast<int>(client.right) - border * 2);
     const int maxColumns = std::max(1, (contentWidth + gap) / (cellWidth + gap));
     for (int index = 0; index < count; ++index) {
@@ -2226,8 +2230,11 @@ void ToggleThumbnailViewer() {
     const int workWidth = static_cast<int>(work.right - work.left);
     const int workHeight = static_cast<int>(work.bottom - work.top);
     constexpr int border = 1, titleHeight = 22, gap = 2;
-    const int cellWidth = g_auxiliarySizeIndex == 0 ? 320 : 640;
-    const int cellHeight = g_auxiliarySizeIndex == 0 ? 180 : 360;
+    static constexpr int widths[]{120, 160, 192};
+    static constexpr int heights[]{68, 90, 108};
+    const int sizeIndex = std::clamp(g_auxiliarySizeIndex, 0, 2);
+    const int cellWidth = widths[sizeIndex];
+    const int cellHeight = heights[sizeIndex];
     const int columns = std::max(1, (workWidth - border * 2 + gap) / (cellWidth + gap));
     const int rows = std::max(1, (onlineCount + columns - 1) / columns);
     const int height = std::min(workHeight,
@@ -2795,13 +2802,19 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
         SaveSettingDword(L"LightKeepMainOnly", 0);
         SaveSettingDword(L"DefaultsV64Applied", 1);
     }
+    // v65 used literal 320/640-pixel preview cells, which were too large for
+    // a multi-window strip. Migrate once to the compact 160x90 preset.
+    if (LoadSettingDword(L"DefaultsV66Applied", 0) == 0) {
+        SaveSettingDword(L"AuxiliarySize", 1);
+        SaveSettingDword(L"DefaultsV66Applied", 1);
+    }
     g_syncFps = std::clamp(static_cast<int>(LoadSettingDword(L"SyncFps", 30)), 1, 60);
     g_syncFpsEnabled = LoadSettingDword(L"SyncFpsEnabled", 1) != 0;
     g_lightMode = LoadSettingDword(L"LightMode", 0) != 0;
     g_arrangeSizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"ArrangeSize", 2)), 0, 5);
     g_lightAffinityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightAffinity", 0)), 0, 2);
     g_lightKeepMainOnly = LoadSettingDword(L"LightKeepMainOnly", 0) != 0;
-    g_auxiliarySizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliarySize", 0)), 0, 1);
+    g_auxiliarySizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliarySize", 1)), 0, 2);
     g_auxiliaryPriorityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliaryPriority", 1)), 0, 1);
     INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
                                          ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
