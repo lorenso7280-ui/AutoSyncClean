@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.64 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.65 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -37,6 +37,7 @@ enum : int {
     IDC_SETTINGS_AUTORENAME = 3201, IDC_SETTINGS_DELAY, IDC_SETTINGS_FPS_ENABLE,
     IDC_SETTINGS_FPS_SLIDER, IDC_SETTINGS_FPS_VALUE, IDC_SETTINGS_LIGHT_ENABLE,
     IDC_SETTINGS_LIGHT_SIZE, IDC_SETTINGS_LIGHT_AFFINITY, IDC_SETTINGS_LIGHT_KEEP_MAIN,
+    IDC_SETTINGS_AUX_PRIORITY,
     IDC_RECORD_START = 3301, IDC_RECORD_STOP, IDC_RECORD_REPEAT, IDC_RECORD_GAP,
     IDC_RECORD_LIST, IDC_RECORD_EVENTS, IDC_RECORD_VM_MODE,
     IDM_RECORD_ADD = 3401, IDM_RECORD_DELETE, IDM_RECORD_DELETE_ALL,
@@ -116,6 +117,8 @@ bool g_syncFpsEnabled{true};
 bool g_lightMode{};
 int g_lightAffinityIndex{};
 bool g_lightKeepMainOnly{};
+int g_auxiliarySizeIndex{};
+int g_auxiliaryPriorityIndex{1};
 bool g_bulkChecking{};
 int g_arrangeSizeIndex{2};
 int g_playRepeat{1}, g_playGapSeconds{1};
@@ -137,6 +140,7 @@ void RefreshThumbnailViewer(bool force);
 std::wstring ExecutablePath(HWND hwnd);
 void ApplyLightweightMode();
 void SetLightweightMode(bool enabled);
+void LayoutThumbnails(HWND hwnd);
 
 std::wstring LoadSettingString(const wchar_t* name, const wchar_t* fallback = L"") {
     wchar_t value[32768]{};
@@ -707,7 +711,8 @@ void TuneBackgroundProcess(DWORD processId) {
         state.affinityValid = GetProcessAffinityMask(process, &state.processMask, &state.systemMask) != FALSE;
         found = g_processTuning.emplace(processId, state).first;
     }
-    SetPriorityClass(process, BELOW_NORMAL_PRIORITY_CLASS);
+    SetPriorityClass(process, g_auxiliaryPriorityIndex == 0 ? NORMAL_PRIORITY_CLASS
+                                                            : BELOW_NORMAL_PRIORITY_CLASS);
     if (g_lightAffinityIndex > 0 && found->second.affinityValid) {
         const int percentage = g_lightAffinityIndex == 1 ? 75 : 50;
         const DWORD_PTR mask = RotatingAffinityMask(found->second.systemMask, percentage, processId);
@@ -1068,9 +1073,26 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_ENABLE), g_instance, nullptr);
             SendMessageW(light, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
             Button_SetCheck(light, g_lightMode ? BST_CHECKED : BST_UNCHECKED);
-            label(L"Giới hạn CPU:", 22, 274, 125);
+            label(L"Cửa sổ phụ (thanh xem trước):", 22, 270, 230);
+            label(L"Kích thước:", 22, 300, 125);
+            HWND auxiliarySize = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                CBS_DROPDOWNLIST, 151, 296, 175, 90, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_SIZE), g_instance, nullptr);
+            SendMessageW(auxiliarySize, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(auxiliarySize, L"320x180");
+            ComboBox_AddString(auxiliarySize, L"640x360");
+            ComboBox_SetCurSel(auxiliarySize, std::clamp(g_auxiliarySizeIndex, 0, 1));
+            label(L"Ưu tiên tiến trình:", 22, 332, 125);
+            HWND auxiliaryPriority = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                CBS_DROPDOWNLIST, 151, 328, 175, 90, hwnd,
+                reinterpret_cast<HMENU>(IDC_SETTINGS_AUX_PRIORITY), g_instance, nullptr);
+            SendMessageW(auxiliaryPriority, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
+            ComboBox_AddString(auxiliaryPriority, L"Normal");
+            ComboBox_AddString(auxiliaryPriority, L"Below normal");
+            ComboBox_SetCurSel(auxiliaryPriority, std::clamp(g_auxiliaryPriorityIndex, 0, 1));
+            label(L"Giới hạn CPU:", 22, 364, 125);
             HWND affinity = CreateWindowW(L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-                CBS_DROPDOWNLIST, 151, 270, 175, 110, hwnd,
+                CBS_DROPDOWNLIST, 151, 360, 175, 110, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_AFFINITY), g_instance, nullptr);
             SendMessageW(affinity, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
             ComboBox_AddString(affinity, L"Không giới hạn affinity");
@@ -1078,12 +1100,12 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ComboBox_AddString(affinity, L"Dùng 50% số lõi");
             ComboBox_SetCurSel(affinity, std::clamp(g_lightAffinityIndex, 0, 2));
             HWND keepMain = CreateWindowW(L"BUTTON", L"Chỉ giữ cửa sổ chính hiển thị",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 306, 300, 24, hwnd,
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 22, 396, 300, 24, hwnd,
                 reinterpret_cast<HMENU>(IDC_SETTINGS_LIGHT_KEEP_MAIN), g_instance, nullptr);
             SendMessageW(keepMain, WM_SETFONT, reinterpret_cast<WPARAM>(g_uiFont), TRUE);
             Button_SetCheck(keepMain, g_lightKeepMainOnly ? BST_CHECKED : BST_UNCHECKED);
-            label(L"Cửa sổ chính được giữ lại; các cửa sổ khác chỉ minimize.", 22, 338, 430);
-            label(L"Tắt chế độ để khôi phục cửa sổ, priority và affinity ban đầu.", 22, 362, 430);
+            label(L"Kích thước cửa sổ phụ không resize cửa sổ game thật.", 22, 428, 430);
+            label(L"Tắt chế độ để khôi phục cửa sổ, priority và affinity ban đầu.", 22, 452, 430);
             return 0;
         }
         case WM_HSCROLL:
@@ -1106,6 +1128,18 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (LOWORD(wp) == IDC_SETTINGS_LIGHT_ENABLE) {
                 const bool enabled = Button_GetCheck(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_ENABLE)) == BST_CHECKED;
                 SetLightweightMode(enabled);
+            }
+            if (LOWORD(wp) == IDC_SETTINGS_LIGHT_SIZE && HIWORD(wp) == CBN_SELCHANGE) {
+                int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_SIZE));
+                g_auxiliarySizeIndex = std::clamp(index == CB_ERR ? 0 : index, 0, 1);
+                SaveSettingDword(L"AuxiliarySize", static_cast<DWORD>(g_auxiliarySizeIndex));
+                if (g_thumbnailViewer) LayoutThumbnails(g_thumbnailViewer);
+            }
+            if (LOWORD(wp) == IDC_SETTINGS_AUX_PRIORITY && HIWORD(wp) == CBN_SELCHANGE) {
+                int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_AUX_PRIORITY));
+                g_auxiliaryPriorityIndex = std::clamp(index == CB_ERR ? 1 : index, 0, 1);
+                SaveSettingDword(L"AuxiliaryPriority", static_cast<DWORD>(g_auxiliaryPriorityIndex));
+                ApplyLightweightMode();
             }
             if (LOWORD(wp) == IDC_SETTINGS_LIGHT_AFFINITY && HIWORD(wp) == CBN_SELCHANGE) {
                 int index = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_LIGHT_AFFINITY));
@@ -1151,7 +1185,7 @@ void ShowSettings() {
     }
     RECT owner{}; GetWindowRect(g_main, &owner);
     g_settingsWindow = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.Settings", L"Thiết lập",
-        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 20, 470, 475,
+        WS_CAPTION | WS_SYSMENU, owner.left + 100, owner.top + 20, 470, 565,
         g_main, nullptr, g_instance, nullptr);
     ShowWindow(g_settingsWindow, SW_SHOW); UpdateWindow(g_settingsWindow);
 }
@@ -2012,14 +2046,10 @@ void LayoutThumbnails(HWND hwnd) {
     const int count = static_cast<int>(g_thumbnails.size());
     if (!count || client.right <= 0 || client.bottom <= 0) return;
     constexpr int border = 1, titleHeight = 22, gap = 2;
-    constexpr int maxColumns = 10;
-    const int rows = (count + maxColumns - 1) / maxColumns;
+    const int cellWidth = g_auxiliarySizeIndex == 0 ? 320 : 640;
+    const int cellHeight = g_auxiliarySizeIndex == 0 ? 180 : 360;
     const int contentWidth = std::max(1, static_cast<int>(client.right) - border * 2);
-    // Always reserve ten equal columns, like 360Auto. Height comes from the
-    // 16:9 game frame instead of sharing all unused vertical space; this
-    // removes the large bands above, between and below thumbnail rows.
-    const int cellWidth = std::max(1, (contentWidth - gap * (maxColumns - 1)) / maxColumns);
-    const int cellHeight = std::max(1, MulDiv(cellWidth, 9, 16));
+    const int maxColumns = std::max(1, (contentWidth + gap) / (cellWidth + gap));
     for (int index = 0; index < count; ++index) {
         auto& item = g_thumbnails[static_cast<size_t>(index)];
         const int column = index % maxColumns;
@@ -2193,12 +2223,13 @@ void ToggleThumbnailViewer() {
     RECT work{}; SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     int onlineCount = 0;
     for (const auto& window : g_windows) if (IsWindow(window.hwnd)) ++onlineCount;
-    const int rows = std::max(1, (onlineCount + 9) / 10);
     const int workWidth = static_cast<int>(work.right - work.left);
     const int workHeight = static_cast<int>(work.bottom - work.top);
-    constexpr int border = 1, titleHeight = 22, gap = 2, columns = 10;
-    const int cellWidth = std::max(1, (workWidth - border * 2 - gap * (columns - 1)) / columns);
-    const int cellHeight = std::max(1, MulDiv(cellWidth, 9, 16));
+    constexpr int border = 1, titleHeight = 22, gap = 2;
+    const int cellWidth = g_auxiliarySizeIndex == 0 ? 320 : 640;
+    const int cellHeight = g_auxiliarySizeIndex == 0 ? 180 : 360;
+    const int columns = std::max(1, (workWidth - border * 2 + gap) / (cellWidth + gap));
+    const int rows = std::max(1, (onlineCount + columns - 1) / columns);
     const int height = std::min(workHeight,
         titleHeight + border + rows * cellHeight + std::max(0, rows - 1) * gap);
     HWND viewer = CreateWindowExW(WS_EX_TOOLWINDOW, L"AutoSyncClean.ThumbnailViewer", L"Xem cửa sổ thu nhỏ",
@@ -2770,6 +2801,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     g_arrangeSizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"ArrangeSize", 2)), 0, 5);
     g_lightAffinityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"LightAffinity", 0)), 0, 2);
     g_lightKeepMainOnly = LoadSettingDword(L"LightKeepMainOnly", 0) != 0;
+    g_auxiliarySizeIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliarySize", 0)), 0, 1);
+    g_auxiliaryPriorityIndex = std::clamp(static_cast<int>(LoadSettingDword(L"AuxiliaryPriority", 1)), 0, 1);
     INITCOMMONCONTROLSEX icc{sizeof(icc), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES |
                                          ICC_STANDARD_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
