@@ -9,6 +9,8 @@ add_executable(AutoSyncClean WIN32
     src/app.rc
 )
 
+set_target_properties(AutoSyncClean PROPERTIES OUTPUT_NAME "AutoSyncClean v.61")
+
 target_compile_definitions(AutoSyncClean PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(AutoSyncClean PRIVATE comctl32 dwmapi comdlg32 advapi32)
 
