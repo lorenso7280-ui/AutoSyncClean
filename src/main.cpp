@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.68 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.69 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -1750,6 +1750,12 @@ struct LaunchRequest {
     DWORD delay{2000};
 };
 
+struct LaunchResult {
+    std::wstring path;
+    int launched{};
+    int requested{};
+};
+
 DWORD WINAPI LaunchThread(void* raw) {
     std::unique_ptr<LaunchRequest> request(static_cast<LaunchRequest*>(raw));
     std::wstring directory = request->path;
@@ -1771,7 +1777,13 @@ DWORD WINAPI LaunchThread(void* raw) {
         }
         if (i + 1 < request->count) Sleep(request->delay);
     }
-    PostMessageW(g_main, WM_APP + 1, static_cast<WPARAM>(launched), static_cast<LPARAM>(request->count));
+    auto result = std::make_unique<LaunchResult>();
+    result->path = request->path;
+    result->launched = launched;
+    result->requested = request->count;
+    if (!PostMessageW(g_main, WM_APP + 1, reinterpret_cast<WPARAM>(result.get()), 0))
+        return 0;
+    result.release();
     return 0;
 }
 
@@ -2891,10 +2903,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_APP + 1: {
+            std::unique_ptr<LaunchResult> result(reinterpret_cast<LaunchResult*>(wp));
+            if (!result) return 0;
+
+            // The launcher can be used while the list is completely empty.
+            // In that case there is no picked window from which to learn the
+            // executable group, so remember the launched EXE here. The normal
+            // refresh timer will then discover its top-level HWND as soon as
+            // Unity finishes creating it (which can happen after CreateProcess
+            // has already returned).
+            std::wstring launchedPath = result->path;
+            std::transform(launchedPath.begin(), launchedPath.end(), launchedPath.begin(), towlower);
+            if (!launchedPath.empty() && g_trackedExePath != launchedPath) {
+                g_windows.clear();
+                g_ignored.clear();
+                g_source = nullptr;
+                g_trackedExePath = std::move(launchedPath);
+            }
             RefreshWindows(true);
-            std::wstring text = L"Đã mở " + std::to_wstring(wp) + L"/" + std::to_wstring(lp) + L" cửa sổ.";
+            std::wstring text = L"Đã mở " + std::to_wstring(result->launched) + L"/" +
+                                std::to_wstring(result->requested) +
+                                L" cửa sổ. Đang chờ game xuất hiện trong danh sách...";
             SetStatus(text);
-            if (wp != static_cast<WPARAM>(lp))
+            if (result->launched != result->requested)
                 MessageBoxW(hwnd, L"Một số tiến trình không mở được. Game có thể đang chặn đa phiên hoặc cần chạy quyền Administrator.", kTitle, MB_ICONWARNING);
             return 0;
         }
