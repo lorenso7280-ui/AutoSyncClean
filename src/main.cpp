@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.69 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.70 - Đồng Bộ Thao Tác Phím & Chuột";
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -2676,9 +2676,12 @@ void DrawStatusCell(const NMLVCUSTOMDRAW* draw) {
     const int row = static_cast<int>(draw->nmcd.dwItemSpec);
     RECT cell{};
     ListView_GetSubItemRect(g_list, row, 3, LVIR_BOUNDS, &cell);
-    const bool selected = (draw->nmcd.uItemState & CDIS_SELECTED) != 0;
-    const COLORREF rowBackground = selected ? GetSysColor(COLOR_HIGHLIGHT) :
-        ((row % 2) ? RGB(247, 247, 247) : RGB(255, 255, 255));
+    // Keep the status badge on the normal zebra-row background even while
+    // the row is selected. The standard blue selection is useful in the
+    // other columns, but behind the green/red badge it looks like an
+    // unintended blue bar.
+    const COLORREF rowBackground =
+        (row % 2) ? RGB(247, 247, 247) : RGB(255, 255, 255);
     HBRUSH background = CreateSolidBrush(rowBackground);
     FillRect(draw->nmcd.hdc, &cell, background);
     DeleteObject(background);
