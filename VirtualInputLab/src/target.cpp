@@ -21,10 +21,12 @@ std::wstring PipeName() {
 }
 
 RECT HelpButtonRect(const RECT& rc) {
-    const int width = std::clamp((rc.right - rc.left) * 36 / 100, 150, 280);
-    const int height = 54;
-    const int left = (rc.right - width) / 2;
-    const int top = std::max(105, rc.bottom * 62 / 100);
+const int clientWidth = static_cast<int>(rc.right - rc.left);
+const int clientHeight = static_cast<int>(rc.bottom - rc.top);
+const int width = std::clamp(clientWidth * 36 / 100, 150, 280);
+const int height = 54;
+const int left = (clientWidth - width) / 2;
+const int top = std::max(105, clientHeight * 62 / 100);
     return RECT{left, top, left + width, top + height};
 }
 
