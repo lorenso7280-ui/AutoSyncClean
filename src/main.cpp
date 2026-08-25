@@ -21,12 +21,12 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.71 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.72 - Đồng Bộ Thao Tác Phím & Chuột";
 
 constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
 constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
-constexpr COLORREF kDarkRowA = RGB(11, 24, 43);
-constexpr COLORREF kDarkRowB = RGB(8, 20, 36);
+constexpr COLORREF kDarkRowA = RGB(14, 30, 52);
+constexpr COLORREF kDarkRowB = RGB(8, 19, 34);
 constexpr COLORREF kDarkHeader = RGB(17, 28, 51);
 constexpr COLORREF kDarkSelected = RGB(27, 61, 96);
 constexpr COLORREF kDarkBorder = RGB(28, 54, 84);
@@ -2811,8 +2811,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
+            // Alternating dark row colors provide separation without the
+            // bright native grid that is distracting in Midnight Blue mode.
             ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES |
-                                                      LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+                                                      LVS_EX_DOUBLEBUFFER);
             ListView_SetBkColor(g_list, kDarkPanel);
             ListView_SetTextBkColor(g_list, kDarkPanel);
             ListView_SetTextColor(g_list, kDarkText);
