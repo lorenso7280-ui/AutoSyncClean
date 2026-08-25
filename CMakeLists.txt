@@ -6,10 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(AutoSyncClean WIN32
     src/main.cpp
+    src/ipc_controller.cpp
     src/app.rc
 )
 
-set_target_properties(AutoSyncClean PROPERTIES OUTPUT_NAME "AutoSyncClean v.73")
+set_target_properties(AutoSyncClean PROPERTIES OUTPUT_NAME "AutoSyncClean v.74 IPC")
 
 target_compile_definitions(AutoSyncClean PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(AutoSyncClean PRIVATE comctl32 dwmapi comdlg32 advapi32)

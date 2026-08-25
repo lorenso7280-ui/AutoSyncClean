@@ -182,3 +182,23 @@ Chế độ này giảm tải bằng quản lý cửa sổ, thumbnail và lịch
 - Một số game dùng Raw Input, DirectInput độc quyền hoặc cơ chế chống gian lận có thể không nhận thông điệp `PostMessage`. Dự án không can thiệp tiến trình, không tiêm DLL và không vượt cơ chế chống gian lận.
 - Với các game đó, có thể thử **Chế độ máy ảo (khóa chuột)**. Chế độ này dùng API đầu vào Windows tiêu chuẩn trong máy khách, không tiêm mã vào tiến trình game.
 - Các cửa sổ nên có cùng tỉ lệ khung hình để tọa độ chuột tương ứng chính xác nhất.
+# AutoSyncClean v74 IPC – mô-đun tùy chọn
+
+Phiên bản này giữ nguyên cơ chế đồng bộ Win32 của v73 và bổ sung một nút **IPC**
+trên thanh công cụ. Mô-đun mặc định tắt, chạy trong cửa sổ riêng và chỉ giao tiếp
+với ứng dụng đã triển khai giao thức `VirtualInputLab.Target.V3`.
+
+## Cách thử với VirtualInputLab V3
+
+1. Mở 6 lần `VirtualInputTarget.exe` của VirtualInputLab V3.
+2. Mở `AutoSyncClean v.74 IPC.exe`, bấm nút **IPC** trên thanh công cụ.
+3. Tích **Bật mô-đun IPC (Target tương thích)** và bấm **Làm mới Target**.
+4. Đặt chuột lần lượt lên bốn nút mẫu, nhấn `F1`, `F2`, `F3`, `F4`.
+5. Chọn số vòng, thời gian giữ và giãn cách rồi bấm **Bắt đầu 1–2–3–4**.
+6. Kết quả được ghi vào `AutoSyncClean_IPC_log.csv`.
+
+Tắt mô-đun hoặc đóng cửa sổ IPC sẽ gửi yêu cầu dừng. Các chức năng đồng bộ,
+quản lý cửa sổ và bản ghi cũ hoạt động độc lập. IPC không điều khiển ứng dụng
+không có bộ nhận tương thích và không đưa mã vào tiến trình khác.
+
+---
