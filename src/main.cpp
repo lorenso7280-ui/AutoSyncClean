@@ -21,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.72 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.73 - Đồng Bộ Thao Tác Phím & Chuột";
 
 constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
 constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
@@ -2430,6 +2430,12 @@ void Layout(HWND hwnd) {
     MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, captionH + 35, std::max(100L, r.right - gap * 2),
                std::max(80L, r.bottom - captionH - 67), TRUE);
+    // The table has exactly five columns. Stretch the final Size column to
+    // the right edge so the unused client area cannot look like a sixth,
+    // empty column.
+    const int listWidth = std::max(100L, r.right - gap * 2);
+    const int fixedColumns = 34 + 92 + 245 + 128;
+    ListView_SetColumnWidth(g_list, 4, std::max(70, listWidth - fixedColumns - 2));
     int bottom = r.bottom - 28;
     MoveWindow(GetDlgItem(hwnd, IDC_SUPPORT), gap, bottom, 128, 23, TRUE);
     MoveWindow(g_status, 136, bottom + 3, std::max(60L, r.right - 140), 18, TRUE);
@@ -2902,10 +2908,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (draw->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
                 {
                     const int row = static_cast<int>(draw->nmcd.dwItemSpec);
-                    const bool selected = (draw->nmcd.uItemState & CDIS_SELECTED) != 0;
                     draw->clrText = kDarkText;
-                    draw->clrTextBk = selected ? kDarkSelected :
-                        ((row % 2) ? kDarkRowB : kDarkRowA);
+                    draw->clrTextBk = (row % 2) ? kDarkRowB : kDarkRowA;
                     return CDRF_NOTIFYSUBITEMDRAW;
                 }
                 if (draw->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM) &&
@@ -2920,10 +2924,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     // subitem, otherwise the status background leaks into the
                     // Size column.
                     const int row = static_cast<int>(draw->nmcd.dwItemSpec);
-                    const bool selected = (draw->nmcd.uItemState & CDIS_SELECTED) != 0;
                     draw->clrText = kDarkText;
-                    draw->clrTextBk = selected ? kDarkSelected :
-                        ((row % 2) ? kDarkRowB : kDarkRowA);
+                    draw->clrTextBk = (row % 2) ? kDarkRowB : kDarkRowA;
                     return CDRF_NEWFONT;
                 }
             }
