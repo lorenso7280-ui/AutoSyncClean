@@ -1,47 +1,43 @@
-# Virtual Input Lab V2
+# Virtual Input Lab V3
 
-Đây là bộ thử nghiệm Win32 độc lập dành cho ứng dụng do chúng ta sở hữu. Bộ này
-không can thiệp, không hook và không nạp DLL vào game.
+Bo thu nghiem Win32 doc lap danh cho ung dung do chung ta so huu. V3 khong hook,
+khong inject DLL va khong dieu khien tro choi ben thu ba.
 
-## V2 kiểm tra những gì?
+## Chuc nang V3
 
-- Mỗi `VirtualInputTarget.exe` có nút **TRỢ GIÚP** với vùng hit-test thật.
-- Controller phát riêng `LEFT DOWN`, giữ nút theo số mili giây đã chọn, rồi phát
-  `LEFT UP` với cùng sequence.
-- Bộ đếm chỉ tăng khi DOWN và UP đều nằm trong nút.
-- Chế độ tọa độ chuẩn hóa dùng thang `0..10000`; vì vậy Target kích thước khác
-  nhau vẫn nhận đúng vị trí tương đối.
-- Mỗi Target hiển thị PID, kích thước client, X/Y thực nhận, sequence và thời
-  điểm nhận để đối chiếu.
-- Lệnh được gửi song song qua Named Pipe và không di chuyển con trỏ Windows.
-- Có lặp, tạm dừng/tiếp tục và đặt lại bộ đếm.
+- Bon nut BUOC 1, BUOC 2, BUOC 3, BUOC 4 co hit-test rieng.
+- Lay diem tren mot Target mau: dat con tro vao nut roi nhan F1, F2, F3, F4.
+- Diem duoc luu theo toa do chuan hoa 0..10000.
+- Moi buoc phat MOVE, LEFT DOWN, giu nut, roi LEFT UP.
+- Chay chuoi 1-2-3-4 tren tat ca Target duoc danh dau.
+- Co so vong, gian cach, tam dung, tiep tuc, dung va dat lai bo dem.
+- Target da dong duoc ghi FAIL va bi bo qua, khong lam Controller treo.
+- Ghi file VirtualInputLab_V3_log.csv voi PID, sequence, step, loai lenh,
+  OK/FAIL va thoi gian gui.
+- Khi phat lenh IPC, con tro Windows khong bi di chuyen.
 
-## Build bằng GitHub Actions
+## Build
 
-Workflow cũ vẫn dùng được vì tên hai file EXE không đổi. Sau khi commit source
-V2, mở **Actions → Build Virtual Input Lab**, chờ dấu tích xanh rồi tải artifact
-`VirtualInputLab_Windows_x64`.
+Workflow GitHub Actions cu van dung duoc vi ten hai EXE khong thay doi. Upload
+thu muc VirtualInputLab, commit, mo Actions va tai artifact
+VirtualInputLab_Windows_x64.
 
-## Kiểm thử chuẩn
+## Kiem thu
 
-1. Xóa hoặc đóng toàn bộ EXE V1 đang chạy.
-2. Mở `VirtualInputTarget.exe` 6 lần.
-3. Kéo thay đổi kích thước các Target thành nhiều cỡ khác nhau.
-4. Mở `VirtualInputController.exe`, bấm **Làm mới danh sách** và kiểm tra đủ 6 PID.
-5. Giữ chọn **Tọa độ chuẩn hóa 0–10000**.
-6. Đặt `X=5000`, `Y=6900`, giữ nút `80 ms`.
-7. Bấm **Đặt lại bộ đếm**, sau đó bấm **Click đồng thời** một lần.
-8. Cả 6 Target phải hiện `Click trúng nút: 1`, cùng sequence; con trỏ thật vẫn
-   có thể dùng ở nơi khác.
-9. Đặt lặp `10`, giãn cách `1000 ms`, bấm **Bắt đầu lặp**. Sau khi hoàn tất, cả
-   6 Target phải có cùng bộ đếm.
+1. Dong tat ca EXE V2.
+2. Mo VirtualInputTarget.exe 6 lan va doi kich thuoc vai cua so.
+3. Mo VirtualInputController.exe, bam Lam moi danh sach.
+4. Dam bao du 6 PID va ca 6 duoc danh dau.
+5. Tren mot Target mau, dat chuot lan luot vao tam BUOC 1..4 va nhan F1..F4.
+6. Bam Dat lai bo dem.
+7. Dat so vong 10, giu nut 80 ms, gian cach 250 ms.
+8. Bam Bat dau 1-2-3-4.
+9. Ket qua dung: moi nut cua ca 6 Target co so lan 10, sequence cuoi giong
+   nhau va con tro vat ly van dung binh thuong.
+10. Mo file CSV: cac dong binh thuong la OK; Target bi dong giua luc chay se co
+    FAIL nhung Controller van tiep tuc.
 
-Nếu bỏ chọn tọa độ chuẩn hóa, X/Y được hiểu là pixel client tuyệt đối. Khi các
-Target khác kích thước, cùng một X/Y có thể không còn nằm trong nút; đây là phép
-đối chứng để thấy vì sao cần quy đổi tọa độ.
+## Pham vi
 
-## Phạm vi kết quả
-
-Thử nghiệm chỉ chứng minh IPC, hit-test và tọa độ ảo hoạt động khi ứng dụng đích
-chủ động hỗ trợ giao thức. Nó không làm cho một ứng dụng hoặc trò chơi bên thứ ba
-tự nhận Named Pipe hay tọa độ ảo.
+Ket qua chi chung minh IPC va toa do ao voi Target chu dong ho tro giao thuc V3.
+Doomsday khong co bo nhan nay, nen hai EXE V3 khong dieu khien truc tiep game.
