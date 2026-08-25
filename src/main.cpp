@@ -21,7 +21,18 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.70 - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.71 - Đồng Bộ Thao Tác Phím & Chuột";
+
+constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
+constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
+constexpr COLORREF kDarkRowA = RGB(11, 24, 43);
+constexpr COLORREF kDarkRowB = RGB(8, 20, 36);
+constexpr COLORREF kDarkHeader = RGB(17, 28, 51);
+constexpr COLORREF kDarkSelected = RGB(27, 61, 96);
+constexpr COLORREF kDarkBorder = RGB(28, 54, 84);
+constexpr COLORREF kDarkText = RGB(220, 231, 246);
+constexpr COLORREF kDarkMuted = RGB(145, 166, 194);
+constexpr COLORREF kMidnightBlue = RGB(30, 86, 209);
 
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
@@ -102,6 +113,7 @@ HWND g_settingsWindow{}, g_recordManager{}, g_recordList{}, g_recordEvents{}, g_
 HWND g_recordEditor{}, g_editorEvents{}, g_editorName{}, g_editorSource{};
 HHOOK g_keyboardHook{}, g_mouseHook{};
 HFONT g_uiFont{}, g_smallFont{};
+HBRUSH g_mainBrush{}, g_panelBrush{};
 std::vector<WindowItem> g_windows;
 std::vector<ThumbnailItem> g_thumbnails;
 std::unordered_set<HWND> g_ignored;
@@ -2425,7 +2437,7 @@ void Layout(HWND hwnd) {
 
 void ApplyBlueTitleBar(HWND hwnd) {
     // Match the solid royal-blue caption/border in the supplied UI mock-up.
-    const COLORREF blue = RGB(49, 68, 181);
+    const COLORREF blue = kMidnightBlue;
     const COLORREF white = RGB(255, 255, 255);
     DwmSetWindowAttribute(hwnd, 34, &blue, sizeof(blue));
     DwmSetWindowAttribute(hwnd, 35, &blue, sizeof(blue));
@@ -2490,7 +2502,7 @@ void AddToolbarTooltip(HWND control, const wchar_t* text) {
 void DrawMainCaption(HWND hwnd, HDC dc) {
     RECT client{}; GetClientRect(hwnd, &client);
     RECT caption{0, 0, client.right, 32};
-    HBRUSH blue = CreateSolidBrush(RGB(49, 68, 181));
+    HBRUSH blue = CreateSolidBrush(kMidnightBlue);
     FillRect(dc, &caption, blue);
     DeleteObject(blue);
     HICON icon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP));
@@ -2514,7 +2526,7 @@ void DrawMainCaption(HWND hwnd, HDC dc) {
     // One-pixel blue frame around the whole application. Keep it in the same
     // client-drawn surface as the caption so Windows never adds a second
     // native border/title bar.
-    HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(45, 137, 218));
+    HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(30, 128, 255));
     oldPen = SelectObject(dc, borderPen);
     oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     Rectangle(dc, 0, 0, std::max(1L, client.right), std::max(1L, client.bottom));
@@ -2558,11 +2570,11 @@ bool HandleCaptionButton(HWND hwnd, LPARAM lp) {
 
 COLORREF ButtonColor(int id) {
     switch (id) {
-        case IDC_SYNC: return g_sync ? RGB(238, 82, 83) : RGB(76, 210, 91);
+        case IDC_SYNC: return g_sync ? RGB(210, 60, 70) : RGB(25, 194, 93);
         case IDC_PLAN: return RGB(243, 137, 57);
-        case IDC_SUPPORT: return RGB(76, 200, 115);
+        case IDC_SUPPORT: return RGB(25, 194, 93);
         case IDC_GROUP: return RGB(54, 153, 219);
-        default: return RGB(247, 249, 251);
+        default: return RGB(13, 28, 51);
     }
 }
 
@@ -2574,18 +2586,18 @@ bool IsToolbarGlyph(int id) {
 void DrawToolbarGlyph(HDC dc, RECT rc, int id) {
     const int cx = (rc.left + rc.right) / 2;
     const int cy = (rc.top + rc.bottom) / 2;
-    HPEN pen = CreatePen(PS_SOLID, 1, RGB(55, 63, 70));
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(190, 207, 231));
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
 
     if (id == IDC_RECORD) {
-        HPEN dotted = CreatePen(PS_DOT, 1, RGB(55, 63, 70));
+        HPEN dotted = CreatePen(PS_DOT, 1, RGB(190, 207, 231));
         SelectObject(dc, dotted);
         Ellipse(dc, cx - 9, cy - 9, cx + 9, cy + 9);
         SelectObject(dc, pen);
         Ellipse(dc, cx - 6, cy - 6, cx + 6, cy + 6);
         RECT text{cx - 6, cy - 7, cx + 7, cy + 7};
-        SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(55, 63, 70));
+        SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(190, 207, 231));
         DrawTextW(dc, L"R", 1, &text, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         DeleteObject(dotted);
     } else if (id == IDC_TILE) {
@@ -2599,7 +2611,7 @@ void DrawToolbarGlyph(HDC dc, RECT rc, int id) {
         MoveToEx(dc, cx - 9, cy, nullptr); LineTo(dc, cx + 9, cy);
         MoveToEx(dc, cx - 7, cy - 5, nullptr); LineTo(dc, cx + 7, cy - 5);
         MoveToEx(dc, cx - 7, cy + 5, nullptr); LineTo(dc, cx + 7, cy + 5);
-        HBRUSH dot = CreateSolidBrush(RGB(55, 63, 70));
+        HBRUSH dot = CreateSolidBrush(RGB(190, 207, 231));
         SelectObject(dc, dot); Ellipse(dc, cx + 3, cy + 3, cx + 9, cy + 9);
         SelectObject(dc, GetStockObject(NULL_BRUSH)); DeleteObject(dot);
     } else if (id == IDC_THUMBNAILS) {
@@ -2633,7 +2645,7 @@ void DrawButton(const DRAWITEMSTRUCT* d) {
     }
     HBRUSH brush = CreateSolidBrush(bg);
     FillRect(d->hDC, &rc, brush); DeleteObject(brush);
-    HPEN pen = CreatePen(PS_SOLID, 1, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : RGB(173,181,189));
+    HPEN pen = CreatePen(PS_SOLID, 1, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : kDarkBorder);
     auto oldPen = SelectObject(d->hDC, pen);
     auto oldBrush = SelectObject(d->hDC, GetStockObject(NULL_BRUSH));
     Rectangle(d->hDC, rc.left, rc.top, rc.right, rc.bottom);
@@ -2644,7 +2656,7 @@ void DrawButton(const DRAWITEMSTRUCT* d) {
     }
     wchar_t text[80]{}; GetWindowTextW(d->hwndItem, text, 80);
     SetBkMode(d->hDC, TRANSPARENT);
-    SetTextColor(d->hDC, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : RGB(45,52,59));
+    SetTextColor(d->hDC, id == IDC_SYNC || id >= IDC_PLAN ? RGB(255,255,255) : kDarkText);
     auto oldFont = SelectObject(d->hDC, g_uiFont);
     DrawTextW(d->hDC, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(d->hDC, oldFont);
@@ -2680,8 +2692,7 @@ void DrawStatusCell(const NMLVCUSTOMDRAW* draw) {
     // the row is selected. The standard blue selection is useful in the
     // other columns, but behind the green/red badge it looks like an
     // unintended blue bar.
-    const COLORREF rowBackground =
-        (row % 2) ? RGB(247, 247, 247) : RGB(255, 255, 255);
+    const COLORREF rowBackground = (row % 2) ? kDarkRowB : kDarkRowA;
     HBRUSH background = CreateSolidBrush(rowBackground);
     FillRect(draw->nmcd.hdc, &cell, background);
     DeleteObject(background);
@@ -2694,19 +2705,50 @@ void DrawStatusCell(const NMLVCUSTOMDRAW* draw) {
     content.right -= 5;
     if (isSource) {
         RECT starBounds{content.left, content.top, content.left + 27, content.bottom};
-        DrawRoundedLabel(draw->nmcd.hdc, starBounds, L"★", RGB(218, 174, 35), RGB(255, 255, 255));
+        DrawRoundedLabel(draw->nmcd.hdc, starBounds, L"★", RGB(151, 108, 9), RGB(255, 240, 183));
         RECT labelBounds{content.left + 30, content.top, content.right, content.bottom};
-        DrawRoundedLabel(draw->nmcd.hdc, labelBounds, L"Cửa sổ chính", RGB(183, 220, 239), RGB(35, 55, 68));
+        DrawRoundedLabel(draw->nmcd.hdc, labelBounds, L"Cửa sổ chính", RGB(35, 75, 105), RGB(218, 237, 251));
     } else if (IsWindow(gameWindow)) {
         const bool synchronizing = g_sync && row >= 0 && row < static_cast<int>(g_windows.size()) &&
                                     g_windows[static_cast<size_t>(row)].selected;
         DrawRoundedLabel(draw->nmcd.hdc, content,
                          synchronizing ? L"Đang đồng bộ" : L"Online",
-                         RGB(190, 232, 198), RGB(28, 70, 39));
+                         RGB(10, 91, 49), RGB(194, 244, 211));
     } else {
-        DrawRoundedLabel(draw->nmcd.hdc, content, L"Offline", RGB(244, 190, 186), RGB(105, 35, 31));
+        DrawRoundedLabel(draw->nmcd.hdc, content, L"Offline", RGB(139, 39, 42), RGB(255, 210, 210));
     }
     SelectObject(draw->nmcd.hdc, oldFont);
+}
+
+void DrawHeaderCell(const NMCUSTOMDRAW* draw) {
+    const int column = static_cast<int>(draw->dwItemSpec);
+    RECT cell{};
+    Header_GetItemRect(ListView_GetHeader(g_list), column, &cell);
+    HBRUSH background = CreateSolidBrush(kDarkHeader);
+    FillRect(draw->hdc, &cell, background);
+    DeleteObject(background);
+    HPEN line = CreatePen(PS_SOLID, 1, kDarkBorder);
+    auto oldPen = SelectObject(draw->hdc, line);
+    MoveToEx(draw->hdc, cell.right - 1, cell.top, nullptr);
+    LineTo(draw->hdc, cell.right - 1, cell.bottom);
+    MoveToEx(draw->hdc, cell.left, cell.bottom - 1, nullptr);
+    LineTo(draw->hdc, cell.right, cell.bottom - 1);
+    SelectObject(draw->hdc, oldPen);
+    DeleteObject(line);
+
+    wchar_t text[128]{};
+    HDITEMW item{};
+    item.mask = HDI_TEXT;
+    item.pszText = text;
+    item.cchTextMax = 128;
+    Header_GetItem(ListView_GetHeader(g_list), column, &item);
+    cell.left += column == 0 ? 0 : 10;
+    SetBkMode(draw->hdc, TRANSPARENT);
+    SetTextColor(draw->hdc, kDarkText);
+    auto oldFont = SelectObject(draw->hdc, g_uiFont);
+    DrawTextW(draw->hdc, text, -1, &cell,
+              (column == 0 ? DT_CENTER : DT_LEFT) | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    SelectObject(draw->hdc, oldFont);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -2723,11 +2765,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_ERASEBKGND: {
+            RECT client{};
+            GetClientRect(hwnd, &client);
+            FillRect(reinterpret_cast<HDC>(wp), &client,
+                     g_mainBrush ? g_mainBrush : reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+            return 1;
+        }
         case WM_LBUTTONUP:
             if (HandleCaptionButton(hwnd, lp)) return 0;
             break;
         case WM_CREATE: {
             g_main = hwnd;
+            g_mainBrush = CreateSolidBrush(kDarkCanvas);
+            g_panelBrush = CreateSolidBrush(kDarkPanel);
             g_uiFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, VIETNAMESE_CHARSET,
                                   OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                   DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
@@ -2762,8 +2813,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
             ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES |
                                                       LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
-            ListView_SetBkColor(g_list, RGB(255,255,255));
-            ListView_SetTextBkColor(g_list, RGB(255,255,255));
+            ListView_SetBkColor(g_list, kDarkPanel);
+            ListView_SetTextBkColor(g_list, kDarkPanel);
+            ListView_SetTextColor(g_list, kDarkText);
             InsertColumn(0, 34, L"#"); InsertColumn(1, 92, L"Mã cửa sổ");
             InsertColumn(2, 245, L"Tiêu đề"); InsertColumn(3, 128, L"Trạng thái");
             InsertColumn(4, 90, L"Kích thước");
@@ -2779,7 +2831,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             DrawButton(reinterpret_cast<DRAWITEMSTRUCT*>(lp)); return TRUE;
         case WM_CTLCOLORSTATIC:
             SetBkMode(reinterpret_cast<HDC>(wp), TRANSPARENT);
-            return reinterpret_cast<LRESULT>(GetStockObject(WHITE_BRUSH));
+            SetTextColor(reinterpret_cast<HDC>(wp), kDarkMuted);
+            return reinterpret_cast<LRESULT>(g_mainBrush);
         case WM_GETMINMAXINFO: {
             auto* info = reinterpret_cast<MINMAXINFO*>(lp);
             info->ptMinTrackSize = {560, 255};
@@ -2793,6 +2846,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_NOTIFY: {
             auto* n = reinterpret_cast<NMHDR*>(lp);
+            if (n->hwndFrom == ListView_GetHeader(g_list) && n->code == NM_CUSTOMDRAW) {
+                auto* draw = reinterpret_cast<NMCUSTOMDRAW*>(lp);
+                if (draw->dwDrawStage == CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
+                if (draw->dwDrawStage == CDDS_ITEMPREPAINT) {
+                    DrawHeaderCell(draw);
+                    return CDRF_SKIPDEFAULT;
+                }
+            }
             if (n->hwndFrom == ListView_GetHeader(g_list) &&
                 (n->code == HDN_ITEMCLICKW || n->code == HDN_ITEMCLICKA)) {
                 const auto* header = reinterpret_cast<NMHEADERW*>(lp);
@@ -2839,7 +2900,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (draw->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
                 {
                     const int row = static_cast<int>(draw->nmcd.dwItemSpec);
-                    draw->clrTextBk = (row % 2) ? RGB(247, 247, 247) : RGB(255, 255, 255);
+                    const bool selected = (draw->nmcd.uItemState & CDIS_SELECTED) != 0;
+                    draw->clrText = kDarkText;
+                    draw->clrTextBk = selected ? kDarkSelected :
+                        ((row % 2) ? kDarkRowB : kDarkRowA);
                     return CDRF_NOTIFYSUBITEMDRAW;
                 }
                 if (draw->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM) &&
@@ -2853,8 +2917,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     // ListView reuses this custom-draw structure for the next
                     // subitem, otherwise the status background leaks into the
                     // Size column.
-                    draw->clrText = GetSysColor(COLOR_WINDOWTEXT);
-                    draw->clrTextBk = GetSysColor(COLOR_WINDOW);
+                    const int row = static_cast<int>(draw->nmcd.dwItemSpec);
+                    const bool selected = (draw->nmcd.uItemState & CDIS_SELECTED) != 0;
+                    draw->clrText = kDarkText;
+                    draw->clrTextBk = selected ? kDarkSelected :
+                        ((row % 2) ? kDarkRowB : kDarkRowA);
                     return CDRF_NEWFONT;
                 }
             }
@@ -2954,6 +3021,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HideHoverTip();
             if (g_uiFont) DeleteObject(g_uiFont);
             if (g_smallFont) DeleteObject(g_smallFont);
+            if (g_mainBrush) DeleteObject(g_mainBrush);
+            if (g_panelBrush) DeleteObject(g_panelBrush);
             PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
