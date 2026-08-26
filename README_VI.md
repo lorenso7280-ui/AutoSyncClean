@@ -1,4 +1,17 @@
-# AutoSync Clean v.68
+# AutoSync Clean v.75 IPC DPI
+
+## Sửa tọa độ vùng client và DPI trong v75
+
+- Tiến trình được khai báo **Per-Monitor DPI Aware V2**, nên tọa độ vật lý từ
+  hook chuột và các phép `ScreenToClient`/`ClientToScreen` dùng cùng một hệ đo
+  trên Windows 100%, 125%, 150% và khi chuyển cửa sổ giữa các màn hình.
+- Bản ghi luôn lưu điểm chuẩn hóa theo **vùng client của cửa sổ game cấp cao
+  nhất**, không còn phụ thuộc control con nào đang giữ focus tại thời điểm ghi.
+- Khi phát, điểm chuẩn hóa được dựng lại trong vùng client của từng cửa sổ đích,
+  sau đó mới quy đổi xuống đúng render/control con nhận input.
+- Chế độ phát nền vẫn không dùng `SetCursorPos` hoặc `SendInput`; con trỏ thật
+  tiếp tục hoạt động độc lập. Mô-đun IPC V3 vẫn là tùy chọn và không bị thay đổi.
+- Bản ghi đã tạo bằng v74 có tọa độ sai DPI cần được xóa và ghi lại bằng v75.
 
 Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
 
@@ -191,7 +204,7 @@ với ứng dụng đã triển khai giao thức `VirtualInputLab.Target.V3`.
 ## Cách thử với VirtualInputLab V3
 
 1. Mở 6 lần `VirtualInputTarget.exe` của VirtualInputLab V3.
-2. Mở `AutoSyncClean v.74 IPC.exe`, bấm nút **IPC** trên thanh công cụ.
+2. Mở `AutoSyncClean v.75 IPC DPI.exe`, bấm nút **IPC** trên thanh công cụ.
 3. Tích **Bật mô-đun IPC (Target tương thích)** và bấm **Làm mới Target**.
 4. Đặt chuột lần lượt lên bốn nút mẫu, nhấn `F1`, `F2`, `F3`, `F4`.
 5. Chọn số vòng, thời gian giữ và giãn cách rồi bấm **Bắt đầu 1–2–3–4**.

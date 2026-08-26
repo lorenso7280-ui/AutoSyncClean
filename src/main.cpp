@@ -22,7 +22,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.74 IPC - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.75 IPC DPI - Đồng Bộ Thao Tác Phím & Chuột";
 
 constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
 constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
@@ -367,13 +367,14 @@ HWND InputTarget(HWND topLevel);
 bool PointInSource(POINT screen, POINT& client, RECT& rc) {
     HWND source = g_source ? g_source : GetForegroundWindow();
     if (!source || source == g_main) return false;
+    source = GetAncestor(source, GA_ROOT);
     HWND foreground = GetForegroundWindow();
-    if (g_source && GetAncestor(foreground, GA_ROOT) != GetAncestor(g_source, GA_ROOT)) return false;
-    // Mouse messages are delivered to the focused render/control window, not
-    // necessarily to the top-level frame.  Measure the source point in that
-    // same coordinate space so WebView/DirectX child controls map correctly.
-    source = InputTarget(source);
-    if (!source) return false;
+    if (g_source && GetAncestor(foreground, GA_ROOT) != source) return false;
+    // Store every recording in one canonical coordinate space: the top-level
+    // client area of the source window. The old code measured against whichever
+    // child happened to own focus, then replayed against a possibly different
+    // child. On a 125% DPI display that produced values such as Y=285 for a
+    // control whose real top-level client coordinate was near Y=350.
     client = screen;
     ScreenToClient(source, &client);
     GetClientRect(source, &rc);
@@ -436,10 +437,12 @@ void ActivateSourceWindow() {
 LPARAM ScaledPoint(HWND target, double nx, double ny) {
     RECT r{};
     GetClientRect(target, &r);
-    int maxX = std::max(0, static_cast<int>(r.right) - 1);
-    int maxY = std::max(0, static_cast<int>(r.bottom) - 1);
-    int x = std::clamp(static_cast<int>(nx * r.right), 0, maxX);
-    int y = std::clamp(static_cast<int>(ny * r.bottom), 0, maxY);
+    const int width = std::max(0, static_cast<int>(r.right - r.left));
+    const int height = std::max(0, static_cast<int>(r.bottom - r.top));
+    int maxX = std::max(0, width - 1);
+    int maxY = std::max(0, height - 1);
+    int x = std::clamp(static_cast<int>(std::lround(nx * width)), 0, maxX);
+    int y = std::clamp(static_cast<int>(std::lround(ny * height)), 0, maxY);
     return MAKELPARAM(x, y);
 }
 
@@ -447,9 +450,11 @@ LPARAM MappedPoint(HWND topLevel, HWND target, double nx, double ny) {
     RECT topClient{};
     if (!GetClientRect(topLevel, &topClient) || topClient.right <= 0 || topClient.bottom <= 0)
         return ScaledPoint(target, nx, ny);
+    const int topWidth = static_cast<int>(topClient.right - topClient.left);
+    const int topHeight = static_cast<int>(topClient.bottom - topClient.top);
     POINT point{
-        std::clamp(static_cast<int>(nx * topClient.right), 0, std::max(0, static_cast<int>(topClient.right) - 1)),
-        std::clamp(static_cast<int>(ny * topClient.bottom), 0, std::max(0, static_cast<int>(topClient.bottom) - 1))
+        std::clamp(static_cast<int>(std::lround(nx * topWidth)), 0, std::max(0, topWidth - 1)),
+        std::clamp(static_cast<int>(std::lround(ny * topHeight)), 0, std::max(0, topHeight - 1))
     };
     ClientToScreen(topLevel, &point);
     ScreenToClient(target, &point);
@@ -464,9 +469,11 @@ HWND PointInputTarget(HWND fallback, double nx, double ny) {
     if (!IsWindow(fallback)) return nullptr;
     RECT client{};
     if (!GetClientRect(fallback, &client) || client.right <= 0 || client.bottom <= 0) return fallback;
+    const int width = static_cast<int>(client.right - client.left);
+    const int height = static_cast<int>(client.bottom - client.top);
     POINT screen{
-        std::clamp(static_cast<int>(nx * client.right), 0, std::max(0, static_cast<int>(client.right) - 1)),
-        std::clamp(static_cast<int>(ny * client.bottom), 0, std::max(0, static_cast<int>(client.bottom) - 1))
+        std::clamp(static_cast<int>(std::lround(nx * width)), 0, std::max(0, width - 1)),
+        std::clamp(static_cast<int>(std::lround(ny * height)), 0, std::max(0, height - 1))
     };
     ClientToScreen(fallback, &screen);
     HWND current = fallback;
@@ -526,8 +533,10 @@ void AddMacro(MacroEvent e) {
 void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
     POINT p{}; RECT src{};
     if (!PointInSource(m->pt, p, src) || src.right <= 0 || src.bottom <= 0) return;
-    double nx = static_cast<double>(p.x) / src.right;
-    double ny = static_cast<double>(p.y) / src.bottom;
+    const int sourceWidth = static_cast<int>(src.right - src.left);
+    const int sourceHeight = static_cast<int>(src.bottom - src.top);
+    double nx = std::clamp(static_cast<double>(p.x) / sourceWidth, 0.0, 1.0);
+    double ny = std::clamp(static_cast<double>(p.y) / sourceHeight, 0.0, 1.0);
     WPARAM wp = 0;
     MacroType mt = MacroType::MouseMove;
     switch (msg) {
@@ -906,7 +915,7 @@ void PlayVmEvent(const PlaybackJob::Target& destination, const MacroEvent& event
         SendVmKey(static_cast<WORD>(event.data), true);
         return;
     }
-    POINT point = PlaybackScreenPoint(destination.input, event);
+    POINT point = PlaybackScreenPoint(destination.topLevel, event);
     LockGuestCursorAt(point);
     switch (event.type) {
         case MacroType::MouseMove:
@@ -946,17 +955,18 @@ DWORD WINAPI PlayThread(void* parameter) {
                 if (e.type == MacroType::MouseMove || e.type == MacroType::MouseDown ||
                     e.type == MacroType::MouseUp || e.type == MacroType::MouseClick ||
                     e.type == MacroType::Wheel) {
-                    if (HWND pointTarget = PointInputTarget(destination.input, e.nx, e.ny))
+                    if (HWND pointTarget = PointInputTarget(destination.topLevel, e.nx, e.ny))
                         target = pointTarget;
                 }
                 switch (e.type) {
                     case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
                     case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
                     case MacroType::MouseMove:
-                        UnitySend(target, WM_MOUSEMOVE, 0, ScaledPoint(target, e.nx, e.ny));
+                        UnitySend(target, WM_MOUSEMOVE, 0,
+                                  MappedPoint(destination.topLevel, target, e.nx, e.ny));
                         break;
                     case MacroType::MouseDown: {
-                        const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        const LPARAM point = MappedPoint(destination.topLevel, target, e.nx, e.ny);
                         PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
                         UnitySend(target, static_cast<UINT>(e.data),
                             e.data == WM_LBUTTONDOWN ? MK_LBUTTON :
@@ -965,7 +975,7 @@ DWORD WINAPI PlayThread(void* parameter) {
                         break;
                     }
                     case MacroType::MouseUp: {
-                        const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        const LPARAM point = MappedPoint(destination.topLevel, target, e.nx, e.ny);
                         PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
                         UnitySend(target, static_cast<UINT>(e.data), 0, point);
                         break;
@@ -975,7 +985,7 @@ DWORD WINAPI PlayThread(void* parameter) {
                                              : e.data == WM_RBUTTONDOWN ? WM_RBUTTONUP : WM_MBUTTONUP;
                         const WPARAM button = e.data == WM_LBUTTONDOWN ? MK_LBUTTON
                                              : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON;
-                        const LPARAM point = ScaledPoint(target, e.nx, e.ny);
+                        const LPARAM point = MappedPoint(destination.topLevel, target, e.nx, e.ny);
                         PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
                         UnitySend(target, static_cast<UINT>(e.data), button, point);
                         Sleep(40);
@@ -984,7 +994,8 @@ DWORD WINAPI PlayThread(void* parameter) {
                         break;
                     }
                     case MacroType::Wheel:
-                        UnitySend(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel), ScaledPoint(target, e.nx, e.ny));
+                        UnitySend(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel),
+                                  MappedPoint(destination.topLevel, target, e.nx, e.ny));
                         break;
                 }
             }
@@ -3040,6 +3051,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 } // namespace
 
 int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
+    // Low-level mouse hooks report physical screen pixels. Make every client/
+    // screen conversion use that same coordinate system before any HWND is
+    // created. The manifest carries the equivalent declaration for startup.
+    using SetDpiContext = BOOL(WINAPI*)(HANDLE);
+    if (HMODULE user32 = GetModuleHandleW(L"user32.dll")) {
+        if (auto setDpiContext = reinterpret_cast<SetDpiContext>(
+                GetProcAddress(user32, "SetProcessDpiAwarenessContext"))) {
+            setDpiContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4)));
+        } else {
+            SetProcessDPIAware();
+        }
+    }
     g_instance = instance;
     // v64 changes both lightweight options to opt-in. Reset installations
     // upgraded from older versions once, then remember later user choices.
