@@ -37,7 +37,7 @@ constexpr COLORREF kMidnightBlue = RGB(30, 86, 209);
 enum : int {
     IDC_REFRESH = 1001, IDC_SYNC, IDC_SET_MAIN, IDC_TILE, IDC_RECORD,
     IDC_PLAY, IDC_THUMBNAILS, IDC_LIST, IDC_STATUS, IDC_PLAN, IDC_SUPPORT, IDC_GROUP,
-    IDC_PROXY, IDC_SETTINGS, IDC_IPC,
+    IDC_PROXY, IDC_SETTINGS,
     IDM_SET_MAIN = 2001, IDM_TOGGLE_ITEM, IDM_REFRESH, IDM_CLOSE_ONE,
     IDM_REMOVE_ONE, IDM_SELECT_ALL, IDM_CLEAR_ALL, IDM_SHOW_ALL,
     IDM_CLOSE_ALL, IDM_REMOVE_ALL, IDM_RECORD_TOGGLE, IDM_RECORD_PLAY,
@@ -3014,7 +3014,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_DESTROY:
             SetSync(false); g_playing = false;
-            ShutdownIpcController();
             if (g_lightMode) RestoreLightweightMode();
             if (g_thumbnailViewer) DestroyWindow(g_thumbnailViewer);
             HideHoverTip();
