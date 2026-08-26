@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include "ipc_controller.h"
 #include "resource.h"
 
 #pragma comment(lib, "comctl32.lib")
@@ -22,7 +21,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.77 IPC DPI - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.78 Clean - Đồng Bộ Thao Tác Phím & Chuột";
 
 constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
 constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
@@ -1645,7 +1644,6 @@ void ShowContextMenu(POINT p) {
     hit.pt = clientPoint;
     int row = ListView_HitTest(g_list, &hit);
     if (row < 0 || row >= static_cast<int>(g_windows.size())) {
-        ShowRecordMenu(p);
         return;
     }
     ListView_SetItemState(g_list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
@@ -2453,11 +2451,9 @@ void Layout(HWND hwnd) {
     MoveWindow(g_btnSync, 67, top, 104, buttonH, TRUE);
     int right = r.right - gap;
     MoveWindow(GetDlgItem(hwnd, IDC_SETTINGS), right - 28, top, 28, buttonH, TRUE); right -= 32;
-    MoveWindow(GetDlgItem(hwnd, IDC_IPC), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_THUMBNAILS), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_PROXY), right - 28, top, 28, buttonH, TRUE); right -= 32;
     MoveWindow(GetDlgItem(hwnd, IDC_TILE), right - 28, top, 28, buttonH, TRUE); right -= 32;
-    MoveWindow(GetDlgItem(hwnd, IDC_RECORD), right - 28, top, 28, buttonH, TRUE);
     MoveWindow(g_list, gap, captionH + 35, std::max(100L, r.right - gap * 2),
                std::max(80L, r.bottom - captionH - 67), TRUE);
     // The table has exactly five columns. Stretch the final Size column to
@@ -2615,7 +2611,7 @@ COLORREF ButtonColor(int id) {
 }
 
 bool IsToolbarGlyph(int id) {
-    return id == IDC_RECORD || id == IDC_TILE || id == IDC_PROXY ||
+    return id == IDC_TILE || id == IDC_PROXY ||
            id == IDC_THUMBNAILS || id == IDC_SETTINGS;
 }
 
@@ -2831,21 +2827,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SetWindowSubclass(picker, WindowPickerProc, 1, 0);
             HWND launcher = button(IDC_SET_MAIN, L"▣");
             g_btnSync = button(IDC_SYNC, L"⟳  Bật đồng bộ");
-            HWND records = button(IDC_RECORD, L"Ⓡ");
             HWND arrange = button(IDC_TILE, L"▦");
             HWND proxy = button(IDC_PROXY, L"◉");
             HWND thumbnails = button(IDC_THUMBNAILS, L"▤");
             HWND settings = button(IDC_SETTINGS, L"⚙");
-            HWND ipc = button(IDC_IPC, L"IPC");
             button(IDC_SUPPORT, L"Nguyễn Đức Lộc");
             AddToolbarTooltip(picker, L"Kéo thả target vào cửa sổ game");
             AddToolbarTooltip(launcher, L"Mở cửa sổ");
-            AddToolbarTooltip(records, L"Quản lí bản ghi");
             AddToolbarTooltip(arrange, L"Sắp xếp cửa sổ");
             AddToolbarTooltip(proxy, L"Proxy");
             AddToolbarTooltip(thumbnails, L"Xem cửa sổ thu nhỏ");
             AddToolbarTooltip(settings, L"Thiết lập");
-            AddToolbarTooltip(ipc, L"Mô-đun IPC tùy chọn (chỉ Target tương thích V3)");
             g_list = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS,
                                   0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(IDC_LIST), g_instance, nullptr);
             SendMessageW(g_list, WM_SETFONT, reinterpret_cast<WPARAM>(g_smallFont), TRUE);
@@ -2967,45 +2959,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND: {
             int id = LOWORD(wp);
             if (id >= IDM_SET_MAIN && id <= IDM_REMOVE_ALL) { HandleMenu(id); return 0; }
-            if (id == IDM_RECORD_TOGGLE) { ToggleRecord(); return 0; }
-            if (id == IDM_RECORD_PLAY) {
-                if (!g_macro.empty() && !g_playing) {
-                    SyncChecksFromList();
-                    auto job = std::make_unique<PlaybackJob>();
-                    job->events = g_macro; job->repeat = 1; job->gapSeconds = 0;
-                    for (const auto& window : g_windows) {
-                        if (!window.selected || !IsWindow(window.hwnd)) continue;
-                        if (HWND input = InputTarget(window.hwnd)) job->targets.push_back({window.hwnd, input});
-                    }
-                    if (job->targets.empty() && g_source && IsWindow(g_source))
-                        if (HWND input = InputTarget(g_source)) job->targets.push_back({g_source, input});
-                    if (!job->targets.empty()) {
-                        g_playPaused = false; g_playing = true;
-                        HANDLE thread = CreateThread(nullptr, 0, PlayThread, job.get(), 0, nullptr);
-                        if (thread) { job.release(); CloseHandle(thread); }
-                        else g_playing = false;
-                    }
-                }
-                return 0;
-            }
-            if (id == IDM_RECORD_CLEAR) {
-                g_macro.clear(); g_recording = false;
-                SetStatus(L"Đã xóa bản ghi thao tác.");
-                return 0;
-            }
             switch (id) {
                 case IDC_REFRESH: RefreshWindows(true); break;
                 case IDC_SYNC: SetSync(!g_sync); break;
                 case IDC_SET_MAIN: ShowLauncher(); break;
                 case IDC_TILE: ShowArranger(); break;
                 case IDC_THUMBNAILS: ToggleThumbnailViewer(); break;
-                case IDC_RECORD: {
-                    ShowRecordManager();
-                    break;
-                }
                 case IDC_PROXY: ShowProxyManager(); break;
                 case IDC_SETTINGS: ShowSettings(); break;
-                case IDC_IPC: ShowIpcController(hwnd, g_instance); break;
             }
             return 0;
         }

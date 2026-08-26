@@ -1,236 +1,37 @@
-# AutoSync Clean v.77 IPC DPI
+# AutoSync Clean v.78 Clean
 
-## Phát bản ghi theo đường đồng bộ trực tiếp trong v77
+Đây là bản giao diện gọn, chỉ giữ các chức năng đã sử dụng được:
 
-- V76 đã ghi đủ `LEFT MOUSE DOWN` và `LEFT MOUSE UP`, nhưng phát nền dùng
-  `SendMessageTimeout` kèm chuỗi kích hoạt riêng nên Doomsday không phản hồi.
-- V77 phát `WM_MOUSEMOVE`, `WM_LBUTTONDOWN` và `WM_LBUTTONUP` bằng cùng hàng
-  đợi `PostMessage` đã hoạt động ổn định trong chế độ đồng bộ trực tiếp.
-- Tọa độ vẫn được dựng từ vùng client/DPI của từng cửa sổ, và phát lại không
-  di chuyển con trỏ thật hoặc đưa game lên foreground.
+- Nhận diện và quản lý nhiều cửa sổ game.
+- Chọn cửa sổ chính và các cửa sổ cần đồng bộ.
+- Đồng bộ trực tiếp bàn phím và chuột từ cửa sổ chính.
+- Mở nhiều cửa sổ, sắp xếp/đổi kích thước cửa sổ.
+- Xem cửa sổ thu nhỏ, Proxy và Thiết lập.
 
-## Sửa thiếu Mouse Down trong v76
+Đã loại bỏ khỏi giao diện:
 
-- Khi người dùng bắt đầu ghi từ cửa sổ biên tập rồi click lần đầu vào game,
-  Windows phát hook `LEFT MOUSE DOWN` trước khi chuyển foreground sang game.
-  V75 đã loại nhầm sự kiện này và đôi khi chỉ lưu `LEFT MOUSE UP`.
-- V76 nhận sự kiện kích hoạt đầu tiên nếu điểm click thực sự nằm trên cửa sổ
-  nguồn đã chọn; click vào cửa sổ biên tập hoặc ứng dụng khác vẫn bị loại.
-- Một click hợp lệ phải xuất hiện thành đủ hai dòng `LEFT MOUSE DOWN` và
-  `LEFT MOUSE UP` trước khi lưu hoặc phát lại.
-
-## Sửa tọa độ vùng client và DPI từ v75
-
-- Tiến trình được khai báo **Per-Monitor DPI Aware V2**, nên tọa độ vật lý từ
-  hook chuột và các phép `ScreenToClient`/`ClientToScreen` dùng cùng một hệ đo
-  trên Windows 100%, 125%, 150% và khi chuyển cửa sổ giữa các màn hình.
-- Bản ghi luôn lưu điểm chuẩn hóa theo **vùng client của cửa sổ game cấp cao
-  nhất**, không còn phụ thuộc control con nào đang giữ focus tại thời điểm ghi.
-- Khi phát, điểm chuẩn hóa được dựng lại trong vùng client của từng cửa sổ đích,
-  sau đó mới quy đổi xuống đúng render/control con nhận input.
-- Chế độ phát nền vẫn không dùng `SetCursorPos` hoặc `SendInput`; con trỏ thật
-  tiếp tục hoạt động độc lập. Mô-đun IPC V3 vẫn là tùy chọn và không bị thay đổi.
-- Bản ghi đã tạo bằng v74 có tọa độ sai DPI cần được xóa và ghi lại bằng v75.
-
-Ứng dụng dùng biểu tượng chiến binh **MAXIMUS** do người dùng cung cấp cho file EXE, taskbar và các cửa sổ con. Tài nguyên ICO chứa các kích thước 16×16, 32×32 và 48×48 để Windows hiển thị rõ trên thanh taskbar.
-
-Chế độ phát bản ghi mặc định dùng click nền theo `HWND`: gửi `WM_MOUSEMOVE`, `WM_LBUTTONDOWN` và `WM_LBUTTONUP` bằng `PostMessage` đến vùng render/control của từng cửa sổ đã chọn. Phần mềm không gọi `SetCursorPos`, `mouse_event` hay `SendInput` trong chế độ này, vì vậy con trỏ thật vẫn dùng độc lập cho trình duyệt và công việc khác. Tùy chọn máy ảo/khóa chuột của các bản cũ đã được loại bỏ.
-
-Chỉ các dòng đang được tích checkbox mới nhận thao tác phát lại. Trước mỗi sự kiện chuột, phần mềm dò từ vùng input đã nhận xuống control con sâu nhất nằm đúng dưới tọa độ ghi; cách này xử lý trường hợp các phiên game nền có `HWND` render khác nhau. Thanh trạng thái hiển thị số cửa sổ thực sự được đưa vào danh sách phát.
-
-Với Unity, bản phát nền dùng chuỗi `WM_ACTIVATEAPP` → `WM_ACTIVATE` → `WM_SETCURSOR` → `WM_MOUSEMOVE` → thông điệp nhấn/thả, được gửi bằng `SendMessageTimeout` với giới hạn 40 ms để cửa sổ lỗi không làm treo AutoSyncClean. Tọa độ vẫn nằm trong `lParam`; chương trình tuyệt đối không gọi `SetCapture`, `SetActiveWindow` hoặc `SetCursorPos`, nên không chủ động chiếm con trỏ thật.
-
-Mở hoặc đóng cửa sổ **Quản lí bản ghi** không còn tự tắt chế độ đồng bộ trực tiếp. Khi nút chính hiển thị **Tắt đồng bộ**, thao tác vật lý trong cửa sổ chính vẫn được truyền đến toàn bộ dòng đã tích dù cửa sổ Quản lí bản ghi đang mở. Riêng lúc chọn **Thêm bản ghi** và bắt đầu ghi, đồng bộ trực tiếp vẫn tạm tắt để tránh ghi một thao tác thành nhiều bản sao.
-
-Ứng dụng Windows C++ độc lập để đồng bộ thao tác bàn phím và chuột giữa nhiều cửa sổ. Dự án được viết mới dựa trên hành vi quan sát trong video, không chứa hệ thống tài khoản, VIP hoặc key.
-
-## Chức năng
-
-- Khi khởi động, danh sách luôn trống. Kéo nút tròn vào một cửa sổ game sẽ nhận diện đường dẫn file tiến trình và tự quét toàn bộ cửa sổ/tab đang chạy từ cùng file game.
-- Việc quét theo tiến trình vẫn hoạt động sau khi tắt hẳn rồi mở lại AutoSync Clean, kể cả khi các thanh tiêu đề game trước đó đã được đổi thành `Cửa sổ 1`, `Cửa sổ 2`…
-- Giữ các cửa sổ đã nhận trong danh sách và tự đổi trạng thái `ONLINE`/`OFFLINE` khi game mở hoặc đóng.
-- Danh sách có đường lưới xám mảnh và nền hàng xen kẽ nhẹ. Cột **Trạng thái** dùng nhãn bo tròn: xanh nhạt cho `Online`/`Đang đồng bộ`, đỏ nhạt cho `Offline`; cửa sổ nguồn có huy hiệu sao vàng và nhãn xanh `Cửa sổ chính`. Cột **Kích thước** cùng các cột khác giữ nền hàng mặc định.
-- Làm mới trạng thái theo chu kỳ mà không xóa trắng hoặc làm chớp danh sách; vị trí cuộn và dòng đang chọn được giữ nguyên.
-- Kéo biểu tượng tròn bên trái rồi thả vào cửa sổ Doomsday để nhận cửa sổ thủ công.
-- Sau khi nhận cửa sổ đầu tiên, các cửa sổ mới có cùng tiêu đề game sẽ tự động được thêm vào cùng nhóm.
-- Các cửa sổ mới được thêm vào với checkbox mặc định bỏ chọn; chỉ những dòng người dùng tự tích mới nhận thao tác đồng bộ.
-- Mở đồng thời nhiều tiến trình từ một file `.exe`, với tham số dòng lệnh, số lượng và thời gian giãn cách tùy chọn.
-- Tự lưu đường dẫn game, tham số, số lượng và thời gian giãn cách cho lần sử dụng sau.
-- Chọn/bỏ chọn từng cửa sổ bằng checkbox.
-- Lệnh **Chọn tất cả** tự đổi tên theo thứ tự `Cửa sổ 1`, `Cửa sổ 2`… trong danh sách và trên thanh tiêu đề của từng cửa sổ game.
-- Đặt một cửa sổ làm cửa sổ chính bằng nút **Cửa sổ chính**, nhấp đúp hoặc menu chuột phải.
-- Nhấp phải trực tiếp vào một dòng và chọn **Làm cửa sổ chính**; dòng nguồn được đánh dấu `★ [CỬA SỔ CHÍNH]` ở tiêu đề và trạng thái.
-- Đồng bộ phím xuống/lên, chuột trái/phải/giữa, di chuyển và cuộn.
-- Nhận cả click do phần mềm ngoài như **GS Auto Clicker** tạo ra trong Cửa sổ chính. AutoSyncClean chỉ bỏ qua input mang mã nội bộ của chính nó, vì vậy click tự động được phát tới mọi cửa sổ đang tích chọn mà không tạo vòng lặp.
-- Quy đổi tọa độ chuột theo tỉ lệ vùng client của từng cửa sổ.
-- Xếp chồng các cửa sổ game tại cùng vị trí để nhìn như một cửa sổ, với thông số kích thước, tọa độ X/Y và độ lệch tùy chọn.
-- Thanh xem trước thu nhỏ cập nhật trực tiếp cho toàn bộ cửa sổ game; bấm vào ảnh để đưa game tương ứng lên trên.
-- Cửa sổ chính khởi động ở kích thước 605×454 pixel giống khung 360Auto tham chiếu; thanh tiêu đề dùng màu xanh và vẫn có thể kéo cạnh để thay đổi kích thước.
-- Thanh dưới có nhãn tác giả **Nguyễn Đức Lộc** chữ trắng trên nền xanh lá.
-- Thanh xem trước hiển thị tối đa 10 cửa sổ trên mỗi hàng và tự thêm hàng khi có nhiều hơn 10 cửa sổ.
-- Có thể giữ chuột và kéo một ô trong thanh cửa sổ phụ sang vị trí khác. Khi bấm **Sắp xếp cửa sổ**, danh sách và tiêu đề game được đánh lại từ trên xuống dưới thành `Cửa sổ 1`, `Cửa sổ 2`… theo đúng thứ tự mới; cửa sổ nguồn đã chọn vẫn được giữ theo HWND.
-- Sắp xếp/resize và thanh cửa sổ thu nhỏ luôn áp dụng cho toàn bộ cửa sổ game `ONLINE`, không cần tích checkbox; checkbox chỉ quyết định cửa sổ nhận thao tác đồng bộ.
-- Ghi và phát lại một chuỗi thao tác trong phiên làm việc.
-- Thanh công cụ theo bố cục phần mềm tham chiếu: nhận cửa sổ, mở nhiều cửa sổ và đồng bộ ở bên trái; bản ghi, sắp xếp, Proxy, cửa sổ thu nhỏ và Thiết lập ở bên phải.
-- Thanh dưới đã bỏ ba nút quảng bá **Miễn phí**, **Hỗ trợ** và **Cộng đồng**; chỉ giữ thanh trạng thái chạy hết chiều ngang cửa sổ.
-- Năm nút bên phải dùng biểu tượng GDI tự vẽ, không phụ thuộc font của máy, theo đúng thứ tự: `R` bản ghi, lưới sắp xếp, quả địa cầu Proxy, màn hình thu nhỏ và bánh răng Thiết lập.
-- Nút bản ghi `R` mở cửa sổ **Quản lí bản ghi** với Bắt đầu/Kết thúc, số lần lặp, giãn cách, danh sách bản ghi và chi tiết từng sự kiện.
-- Khi mới mở **Quản lí bản ghi**, danh sách luôn trống. Nhấp phải trong khung **Tên bản ghi** để **Thêm bản ghi**, **Xóa bản ghi** hoặc **Xóa tất cả**.
-- **Thêm bản ghi** mở cửa sổ **Ghi lại thao tác**. Hộp chọn nguồn luôn liệt kê rõ `Cửa sổ 1`, `Cửa sổ 2`… theo đúng thứ tự danh sách; chỉ cửa sổ đang `ONLINE` mới bắt đầu ghi được.
-- Sau khi bấm **Bắt đầu**, chương trình chỉ thu thao tác xảy ra bên trong cửa sổ nguồn đã chọn. Chuyển động con trỏ không được lưu; một click được lưu thành hai sự kiện có thời gian riêng `LEFT MOUSE DOWN` và `LEFT MOUSE UP`, đúng như phần mềm mẫu. Cách này giữ đúng thời gian nhấn-thả để game nhận click ổn định hơn.
-- Khi bấm **Kết thúc**, cột **Giá trị** hiển thị tọa độ pixel rõ ràng theo dạng `X: …, Y: …` của từng click trong cửa sổ đã chọn; sự kiện bàn phím hiển thị mã phím. Hộp nguồn dùng font Unicode và luôn ghi đúng `Cửa sổ 1`, `Cửa sổ 2`…
-- Bàn phím, cuộn chuột và các click tiếp theo vẫn được ghi theo đúng thứ tự/thời gian. Nhập tên rồi bấm **Lưu**; chỉ bản ghi đã lưu mới xuất hiện trong danh sách với đuôi `.json`.
-- Trong cửa sổ quản lí, **Bắt đầu** phát bản ghi đang chọn theo số lần lặp/giãn cách và lập tức đổi thành **Tạm dừng**. Bấm **Tạm dừng** sẽ giữ nguyên vị trí phát và đổi thành **Tiếp tục**; bấm **Kết thúc** dừng hẳn và đưa nút về **Bắt đầu**.
-- Giá trị **Lặp lại** từ 1 đến **99.999** và **Giãn cách** được lưu cho lần mở sau (ví dụ nhập `99999` thì lần sau vẫn hiện `99999`). Checkbox trong danh sách chọn đúng một bản ghi để auto-click; bản ghi vừa lưu được tự động chọn.
-- Mở **Quản lí bản ghi** hoặc **Thêm bản ghi** sẽ tự tắt Đồng bộ. Ghi và phát auto-click hoạt động độc lập, không yêu cầu bật Đồng bộ và không phát thao tác trực tiếp trong lúc đang tạo bản ghi.
-- Trước khi phát, chương trình chụp cố định bản ghi và danh sách mọi cửa sổ `ONLINE` đã tích checkbox (bao gồm cửa sổ nguồn nếu được tích), rồi luồng nền chỉ dùng bản chụp đó. Giao diện thay đổi trong lúc phát không còn làm sai thứ tự hoặc bỏ sót cửa sổ.
-- Ở chế độ nền mặc định, chương trình khóa cố định control nhận input bên trong từng cửa sổ game và dùng `PostMessage` tại tọa độ đã ghi; không di chuyển con trỏ hoặc giành focus của game. Chế độ này phù hợp với ứng dụng chấp nhận thông điệp Win32.
-- Trước mỗi `MOUSE DOWN` và `MOUSE UP`, chương trình gửi thêm `WM_MOUSEMOVE` ảo đến đúng tọa độ bản ghi trong riêng hàng đợi của game. Sự kiện này cập nhật điểm hover nội bộ (ví dụ nút **TRỢ GIÚP**) nhưng không làm xuất hiện hoặc kéo mũi tên chuột Windows về game; người dùng rê chuột thật sang nơi khác không đổi điểm auto-click.
-- **Chế độ máy ảo (khóa chuột)** dùng `SendInput` trong Windows khách cho game không nhận `PostMessage`. Chương trình lần lượt kích hoạt từng cửa sổ game đã chọn, khóa con trỏ khách tại tọa độ đã ghi và phát một click nhấn-thả hoàn chỉnh. Nhấn **F8** để tạm dừng/tiếp tục; nhấn **F9** để kết thúc và mở khóa ngay.
-- Chỉ bật chế độ máy ảo khi game và AutoSyncClean cùng chạy trong Windows khách (VirtualBox, VMware hoặc Hyper-V). Khi đó con trỏ của Windows khách bị điều khiển, còn chuột máy chính vẫn độc lập. Nếu bật trực tiếp trên máy chính, chuột máy chính cũng sẽ bị khóa và di chuyển theo bản ghi.
-- Chế độ ghi được tách khỏi Đồng bộ nên thao tác lúc ghi không tự phát sang các cửa sổ khác. Khi không bật chế độ máy ảo, phát lại vẫn dùng thông điệp nền và không di chuyển hoặc khóa con trỏ thật.
-- Nút `⚙` cho phép bật/tắt riêng chuyển động chuột trong khi vẫn giữ đồng bộ click và bàn phím.
-- Cửa sổ **Thiết lập** có thanh FPS từ 1 đến 60, mặc định 30 FPS ở lần chạy đầu. Phần mềm lưu giá trị FPS và trạng thái bật/tắt vào thiết lập người dùng Windows, nên đóng rồi mở lại vẫn giữ lựa chọn gần nhất. Giá trị này chỉ điều chỉnh tần suất truyền sự kiện di chuyển chuột, không can thiệp FPS render bên trong game.
-- **Chế độ nhẹ máy** dành cho cấu hình chạy nhiều cửa sổ. Từ v60, chế độ này không tự thay đổi kích thước game; kích thước chỉ được chọn trong **Sắp xếp cửa sổ**.
-- Khi bật Chế độ nhẹ máy, chương trình hạ tiến trình game phụ xuống mức ưu tiên CPU **Below normal** và áp dụng affinity đã chọn.
-- Tùy chọn riêng **Chỉ giữ cửa sổ chính hiển thị** sẽ thu nhỏ mọi cửa sổ phụ nhưng không thoát game, giúp người dùng chỉ nhìn và thao tác trên cửa sổ chính khi đang bật đồng bộ. Bỏ tùy chọn này sẽ khôi phục các cửa sổ phụ ngay trong khi Chế độ nhẹ máy vẫn chạy.
-- Chọn nhanh checkbox: bấm một dòng, giữ **Shift** và bấm dòng cuối của dải; tất cả các dòng đang được bôi xanh sẽ tự động được tích.
-- Bấm tiêu đề cột **#** để tích toàn bộ cửa sổ; bấm lần nữa để bỏ tích toàn bộ.
-- Lệnh **Đóng cửa sổ này** sẽ đóng đồng thời tất cả các hàng đã tích checkbox; nếu chưa tích hàng nào thì chỉ đóng hàng đang bấm chuột phải.
-- **Sắp xếp cửa sổ** ghi nhớ mức kích thước đã chọn cho lần mở sau. Kích thước các ô thumbnail bên dưới không thay đổi khi resize game.
-- Sau khi resize game, chương trình chỉ áp lại đúng vùng hiển thị thumbnail đã có, không tính lại kích thước hoặc bố cục các ô xem trước.
-- Thumbnail dùng hình trực tiếp theo thời gian thực: cửa sổ lớn đăng nhập/chuyển màn hình thì ô xem trước tương ứng thay đổi giống ngay, trong khi kích thước và vị trí ô vẫn theo bố cục cố định.
-- **Xóa khỏi danh sách** xóa toàn bộ hàng đang được checkbox; nếu không có checkbox thì chỉ xóa hàng đang bấm chuột phải. Game không bị đóng.
-- Chế độ nhẹ máy có thể chỉ giữ cửa sổ chính hiển thị; các cửa sổ phụ chỉ minimize và vẫn nhận đồng bộ nếu đang Online và được checkbox.
-- Đồng bộ chuột ánh xạ tọa độ đến đúng render/control HWND của từng cửa sổ và gửi vị trí ảo trước sự kiện nút chuột, không di chuyển con trỏ thật.
-- Từ v64, **Chế độ nhẹ máy** và **Chỉ giữ cửa sổ chính hiển thị** mặc định đều không được đánh dấu. Máy nâng cấp từ bản cũ cũng được đặt lại hai tùy chọn này một lần.
-- Tên file chạy trong gói v68 là **AutoSyncClean v.68.exe**; các bản sau sẽ mang số phiên bản tương ứng trong tên EXE.
-
-## Cửa sổ chính và cửa sổ phụ
-
-- **Cửa sổ chính** là các cửa sổ game thật ở phía trên. Mục **Sắp xếp cửa sổ** tiếp tục thay đổi kích thước và vị trí của nhóm này.
-- **Cửa sổ phụ** là các ô xem trước trong thanh **Xem cửa sổ thu nhỏ** phía dưới.
-- Trong **Thiết lập**, cửa sổ phụ có ba kích thước gọn **120x68**, **160x90** và **192x108**. Mặc định là **192x108**; mỗi hàng luôn có tối đa đúng **10 ô** và phần mềm tự co nhẹ nếu màn hình không đủ chiều rộng. Thay đổi này không resize cửa sổ game thật.
-- Tiến trình nền có thể dùng mức ưu tiên **Normal** hoặc **Below normal**; mặc định là **Below normal** khi bật Chế độ nhẹ máy.
-- Có thể giữ nguyên CPU affinity (khuyến nghị) hoặc giới hạn tiến trình phụ còn 75%/50% số bộ xử lý logic. Các mask được xoay theo từng tiến trình để phân bố tải và luôn giữ tối thiểu 2 bộ xử lý logic, tránh dồn 30–90 tiến trình vào cùng một nhóm lõi quá nhỏ.
-- Khi ẩn thanh **Xem cửa sổ thu nhỏ**, chương trình hủy đăng ký toàn bộ DWM thumbnail; khi chính thanh này bị minimize, thumbnail được đánh dấu không hiển thị và vòng làm mới bỏ qua nó. Nhờ vậy ảnh xem trước không tiếp tục được dựng khi không dùng.
-- Khi tắt Chế độ nhẹ máy hoặc thoát AutoSync Clean, chương trình khôi phục vị trí/trạng thái cửa sổ, mức ưu tiên CPU và affinity đã có trước lúc bật chế độ.
-- Menu quản lý: thêm/làm mới, hiện, đóng hoặc loại cửa sổ khỏi danh sách.
-- **Đóng tất cả** áp dụng cho mọi cửa sổ game `ONLINE`, bao gồm cửa sổ chính và không phụ thuộc checkbox. Phần mềm gửi lệnh đóng đồng thời, chờ 300 ms rồi buộc kết thúc đúng các tiến trình game vẫn không phản hồi; lệnh này tự tắt đồng bộ trước và có thể làm mất dữ liệu game chưa lưu.
-- **Hiện tất cả** tiếp tục áp dụng cho những dòng đã tích checkbox.
-
-## Biên dịch
-
-Yêu cầu Windows 10/11, Visual Studio 2022 với workload **Desktop development with C++**, và CMake.
-
-1. Mở `Developer Command Prompt for VS 2022`.
-2. Chuyển vào thư mục dự án.
-3. Chạy `build.bat`.
-4. File kết quả nằm tại `build\Release\AutoSyncClean.exe`.
-
-Hoặc mở thư mục dự án trực tiếp bằng Visual Studio và chọn cấu hình x64 Release.
+- Nút `IPC` và mô-đun IPC tùy chọn.
+- Nút `Quản lí bản ghi` và toàn bộ đường mở cửa sổ ghi/phát lại.
 
 ## Sử dụng
 
-Thanh tiêu đề và viền trên của cửa sổ chính được phần mềm tự vẽ bằng màu xanh đậm, không phụ thuộc tùy chọn màu tiêu đề của Windows 10/11. Cửa sổ không dùng `WS_CAPTION` hoặc `WS_THICKFRAME`, do đó chỉ có duy nhất một thanh tiêu đề màu xanh và không còn viền trắng ngoài bốn cạnh. Khi giữ con trỏ trên 7 nút biểu tượng khoảng 350 ms, tooltip popup hiện tên chức năng tương ứng: **Kéo thả target**, **Mở cửa sổ**, **Quản lí bản ghi**, **Sắp xếp cửa sổ**, **Proxy**, **Xem cửa sổ thu nhỏ** và **Thiết lập**.
+1. Mở các cửa sổ game.
+2. Kéo nút tròn `◎` và thả vào một cửa sổ game để nhận diện.
+3. Tích những cửa sổ cần đồng bộ.
+4. Chọn một cửa sổ làm **Cửa sổ chính**.
+5. Bấm **Bật đồng bộ** rồi thao tác trực tiếp trên cửa sổ chính.
+6. Bấm **Tắt đồng bộ** khi hoàn tất.
 
-Mỗi lần khởi động, cửa sổ chính kích thước `605×454` được đặt chính giữa vùng làm việc của màn hình chính; phép căn giữa tự loại trừ phần taskbar.
+## Build trên GitHub Actions
 
-Bộ đếm trạng thái vẫn kiểm tra cửa sổ game mỗi 3 giây nhưng chỉ dựng lại ListView khi HWND, tiêu đề, kích thước, trạng thái hoặc checkbox thực sự thay đổi. Danh sách dùng chế độ vẽ kép và cập nhật `RDW_NOERASE`, tránh nhịp chớp trắng do xóa/dựng lại toàn bộ danh sách khi dữ liệu không đổi.
+Upload toàn bộ nội dung dự án lên nhánh `build/windows-release`. Workflow
+`.github/workflows/build-windows.yml` sẽ tạo artifact
+`AutoSyncClean-Windows-x64`, bên trong có:
 
-1. Mở các cửa sổ cần điều khiển rồi bấm **Làm mới**.
-2. Đánh dấu các cửa sổ con cần nhận thao tác.
-3. Chọn cửa sổ nguồn và bấm **Cửa sổ chính**.
-4. Bấm **Bật đồng bộ**, sau đó thao tác bên trong cửa sổ chính.
-5. Bấm **Tắt đồng bộ** khi hoàn tất.
+`AutoSyncClean v.78 Clean.exe`
 
-Có thể nhấp chuột phải vào bất kỳ dòng `ONLINE` nào rồi chọn **Làm cửa sổ chính**. Khi đồng bộ bật, phím và chuột chỉ được lấy từ cửa sổ có dấu `★`; thao tác được gửi tới các cửa sổ còn lại đã tích checkbox và không gửi ngược lại cửa sổ chính.
+## Giới hạn
 
-Khi chọn **Đồng bộ → Chọn tất cả**, các cửa sổ được đánh số lại từ trên xuống. Phần mềm gửi thông điệp bàn phím/chuột tới control đang nhận focus bên trong mỗi cửa sổ game, giúp các game Win32 nhận thao tác nền ổn định hơn.
-
-Ngay khi chọn **Làm cửa sổ chính**, phần mềm khôi phục, đưa cửa sổ đó lên trên và chuyển focus vào vùng game. Khi bấm **Bật đồng bộ**, thao tác nhấn/thả chuột và phím được xếp vào hàng đợi của tất cả cửa sổ đích mà không chờ tuần tự từng cửa sổ; nhờ đó một cửa sổ phản hồi chậm không làm các cửa sổ sau bị trễ. Tọa độ chuột được quy đổi theo đúng vùng điều khiển/render đang nhận focus của từng cửa sổ. Chuột di chuyển vẫn được giới hạn ở 60 lần/giây để tránh đầy hàng đợi thông điệp.
-
-### Mở nhiều cửa sổ
-
-1. Chọn một cửa sổ game trong danh sách rồi bấm nút biểu tượng cửa sổ ở góc trên bên trái. Phần mềm sẽ cố tự lấy đường dẫn file `.exe`; cũng có thể bấm `...` để chọn thủ công.
-2. Nhập tham số khởi động mà game hỗ trợ, ví dụ `-la` như trong bản tham chiếu.
-3. Nhập số cửa sổ và thời gian giãn cách (mili giây), rồi bấm **Xác nhận**.
-4. Nếu game chạy quyền Administrator, hãy chạy AutoSync Clean cùng quyền. Nếu game hoặc launcher tự khóa một phiên, phần mềm không vượt khóa đó.
-
-Các thông số trong cửa sổ **Mở cửa sổ** được lưu ngay khi bấm **Xác nhận** và tự điền lại trong lần chạy tiếp theo.
-
-### Nhận cửa sổ bằng kéo thả và trạng thái
-
-1. Giữ chuột trái trên nút tròn `◎` ở góc trên bên trái.
-2. Kéo con trỏ dấu cộng vào cửa sổ game Doomsday rồi thả chuột.
-3. Cửa sổ được thả và tất cả cửa sổ khác chạy cùng file `.exe` sẽ xuất hiện trong danh sách với trạng thái `ONLINE`.
-4. Sau khi đã nhận cửa sổ đầu tiên, nếu mở thêm 4 cửa sổ cùng tên game thì danh sách tự tăng lên thành tổng cộng 5 cửa sổ.
-5. Khi game đóng, dòng đó vẫn được giữ lại và chuyển thành `OFFLINE`. Khi cửa sổ cùng tên mở lại, phần mềm tự ghép và chuyển về `ONLINE`.
-6. Dùng menu chuột phải **Xóa khỏi danh sách** nếu muốn xóa hẳn một dòng, kể cả dòng đang `OFFLINE`.
-
-Để ghi chuỗi thao tác, bấm **Ghi thao tác**, thao tác trong cửa sổ chính, bấm **Dừng ghi**, sau đó dùng **Phát lại**.
-
-Nút Proxy `◉` giải thích và dẫn người dùng tới phương thức cấu hình an toàn. Ứng dụng không giả lập việc áp proxy riêng cho từng game: chức năng đó chỉ hoạt động khi game/launcher hỗ trợ tham số proxy hoặc khi proxy đã được cấu hình trong Windows.
-
-### Xếp chồng và di chuyển cửa sổ
-
-1. Bấm nút biểu tượng lưới ở góc trên bên phải. Tất cả cửa sổ game `ONLINE` sẽ được áp dụng, không cần đánh dấu checkbox.
-2. Chọn kích thước toàn bộ cửa sổ game trong danh sách xổ xuống: `320×180`, `640×360`, `960×540`, `1280×720`, `1600×900` hoặc `1920×1080`, sắp từ nhỏ đến lớn. Mặc định là `960×540`; kích thước bao gồm cả thanh tiêu đề và đường viền, giống cách phần mềm mẫu đo và hiển thị.
-3. Đặt độ lệch mỗi cửa sổ `X = 0`, `Y = 0` để các cửa sổ chồng khít và nhìn như một cửa sổ duy nhất.
-4. Có thể nhập độ lệch khác 0 nếu muốn nhìn thấy mép của từng cửa sổ.
-5. Bấm **Xác nhận**. Cửa sổ chính sẽ được đưa lên trên cùng.
-
-Bản Windows yêu cầu quyền Administrator khi mở để có thể di chuyển/đổi kích thước các cửa sổ game đang chạy quyền cao. Việc sắp xếp được đưa sang tác vụ nền và dùng lệnh di chuyển bất đồng bộ, nên hộp Sắp xếp đóng ngay và giao diện không bị `Not responding` khi game phản hồi chậm. Sau khi hoàn tất, thanh trạng thái sẽ báo số cửa sổ thực sự áp dụng thành công.
-
-### Thanh cửa sổ thu nhỏ
-
-1. Bấm nút biểu tượng thanh thu nhỏ `▤` ở góc trên bên phải.
-2. Thanh **Xem cửa sổ thu nhỏ** sẽ mở sát đáy màn hình và tự hiển thị ảnh trực tiếp của mọi cửa sổ Doomsday.
-   Thanh dùng một thanh tiêu đề tùy chỉnh cao 22 pixel chạy hết chiều ngang và một đường viền xanh 1 pixel bao quanh toàn bộ cửa sổ. Khung trắng `WS_THICKFRAME` của Windows đã được loại bỏ để chiều cao và màu sắc sát với 360Auto. Nền vùng thumbnail màu tối giống giao diện tham chiếu.
-   Thumbnail được xếp theo lưới cố định 10 cửa sổ mỗi hàng, tỷ lệ 16:9 và khe 2 pixel; chiều cao cửa sổ tự ôm vừa số hàng nên không còn khoảng trống lớn phía trên, giữa các hàng hoặc phía dưới.
-3. Bấm vào một ảnh thu nhỏ để khôi phục và đưa cửa sổ game đó lên trên cùng.
-4. Kéo cạnh thanh để đổi kích thước; bấm lại nút `▤` hoặc nút đóng của thanh để ẩn.
-
-Khi dùng lệnh thu nhỏ tất cả của Windows, AutoSync Clean vẫn giữ các HWND còn tồn tại ở trạng thái `ONLINE` và không đăng ký lại/xóa các DWM thumbnail. Vì vậy thanh **Xem cửa sổ thu nhỏ** vẫn giữ các ô game. Bấm **Sắp xếp cửa sổ** rồi **Xác nhận** sẽ khôi phục toàn bộ cửa sổ game trước khi áp dụng kích thước và tọa độ đã chọn.
-
-Mỗi lần mở thanh thu nhỏ, danh sách được giữ nguyên thứ tự hiện tại và đánh số lại `Cửa sổ 1`, `Cửa sổ 2`… Các cửa sổ `ONLINE` được đổi luôn tiêu đề Windows, vì vậy tên trên thumbnail cũng đúng thứ tự. Dòng `OFFLINE` có thể nhấp phải và chọn **Xóa khỏi danh sách**; sau khi xóa, mở lại thanh thu nhỏ để đánh số liên tục từ đầu.
-
-Lệnh **Xóa tất cả** chỉ làm trống danh sách quản lý và thanh thumbnail, không gửi lệnh đóng và không kết thúc bất kỳ game nào. Sau đó giữ nút **Kéo thả target vào cửa sổ game** và thả vào một game đang chạy: phần mềm xóa danh sách bỏ qua cũ, quét lại theo đúng đường dẫn tiến trình và nhận lại toàn bộ cửa sổ cùng game, kể cả cửa sổ đang minimize/ẩn; thanh thumbnail được dựng lại đầy đủ theo danh sách mới.
-
-### Chế độ nhẹ máy cho 30–60–90 cửa sổ
-
-1. Chọn một cửa sổ làm **Cửa sổ chính**. Đây là cửa sổ duy nhất được giữ mở khi chế độ bắt đầu.
-2. Mở **Thiết lập** và tích **Chế độ nhẹ máy**. Nếu cần resize, hãy chọn kích thước riêng trong **Sắp xếp cửa sổ**.
-3. Để **Không giới hạn affinity** nếu chưa đo tải thực tế. Tùy chọn 75% hoặc 50% chỉ nên dùng khi máy có nhiều lõi và cần dành tài nguyên cho tác vụ khác; không nên giới hạn thấp hơn nữa khi chạy hàng chục tiến trình.
-4. Mọi cửa sổ game được resize, còn tiến trình phụ chạy ở mức **Below normal**. Nếu muốn chỉ thao tác trên một cửa sổ, chọn **Chỉ giữ cửa sổ chính hiển thị**; các cửa sổ phụ chỉ bị minimize và vẫn chạy nền.
-5. Bỏ tích **Chế độ nhẹ máy** để khôi phục tất cả cửa sổ cùng priority/affinity ban đầu.
-
-Chế độ này giảm tải bằng quản lý cửa sổ, thumbnail và lịch CPU của Windows. Nó không thay đổi chất lượng texture, hiệu ứng hoặc FPS render thực bên trong Unity. Muốn giảm sâu hơn cần dùng thiết lập đồ họa chính thức của game cho từng tài khoản. Số lượng 30, 60 hay 90 cửa sổ có chạy ổn hay không vẫn phụ thuộc CPU, RAM, VRAM, driver và giới hạn đa phiên của game.
-
-## Giới hạn kỹ thuật
-
-- Ứng dụng dùng hook bàn phím/chuột cấp thấp và gửi thông điệp Win32 tới cửa sổ đích.
-- Nếu ứng dụng đích chạy bằng quyền Administrator, AutoSync Clean cũng cần chạy cùng mức quyền.
-- Một số game dùng Raw Input, DirectInput độc quyền hoặc cơ chế chống gian lận có thể không nhận thông điệp `PostMessage`. Dự án không can thiệp tiến trình, không tiêm DLL và không vượt cơ chế chống gian lận.
-- Với các game đó, có thể thử **Chế độ máy ảo (khóa chuột)**. Chế độ này dùng API đầu vào Windows tiêu chuẩn trong máy khách, không tiêm mã vào tiến trình game.
-- Các cửa sổ nên có cùng tỉ lệ khung hình để tọa độ chuột tương ứng chính xác nhất.
-# AutoSyncClean v74 IPC – mô-đun tùy chọn
-
-Phiên bản này giữ nguyên cơ chế đồng bộ Win32 của v73 và bổ sung một nút **IPC**
-trên thanh công cụ. Mô-đun mặc định tắt, chạy trong cửa sổ riêng và chỉ giao tiếp
-với ứng dụng đã triển khai giao thức `VirtualInputLab.Target.V3`.
-
-## Cách thử với VirtualInputLab V3
-
-1. Mở 6 lần `VirtualInputTarget.exe` của VirtualInputLab V3.
-2. Mở `AutoSyncClean v.77 IPC DPI.exe`, bấm nút **IPC** trên thanh công cụ.
-3. Tích **Bật mô-đun IPC (Target tương thích)** và bấm **Làm mới Target**.
-4. Đặt chuột lần lượt lên bốn nút mẫu, nhấn `F1`, `F2`, `F3`, `F4`.
-5. Chọn số vòng, thời gian giữ và giãn cách rồi bấm **Bắt đầu 1–2–3–4**.
-6. Kết quả được ghi vào `AutoSyncClean_IPC_log.csv`.
-
-Tắt mô-đun hoặc đóng cửa sổ IPC sẽ gửi yêu cầu dừng. Các chức năng đồng bộ,
-quản lý cửa sổ và bản ghi cũ hoạt động độc lập. IPC không điều khiển ứng dụng
-không có bộ nhận tương thích và không đưa mã vào tiến trình khác.
-
----
+Ứng dụng đồng bộ bằng hook bàn phím/chuột Windows và thông điệp Win32. Một số
+game có thể không nhận thao tác nền. Bản v78 Clean không chứa DLL injection,
+hook nội bộ trò chơi hoặc cơ chế vượt bảo vệ tiến trình.

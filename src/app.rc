@@ -4,8 +4,8 @@
 IDI_APP ICON "app.ico"
 
 1 VERSIONINFO
- FILEVERSION 1,77,0,0
- PRODUCTVERSION 1,77,0,0
+ FILEVERSION 1,78,0,0
+ PRODUCTVERSION 1,78,0,0
  FILEFLAGSMASK 0x3fL
  FILEOS 0x40004L
  FILETYPE 0x1L
@@ -16,11 +16,11 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Clean-room project"
       VALUE "FileDescription", "Dong bo thao tac phim va chuot"
-      VALUE "FileVersion", "1.77.0"
+      VALUE "FileVersion", "1.78.0"
       VALUE "InternalName", "AutoSyncClean"
-      VALUE "OriginalFilename", "AutoSyncClean v.77 IPC DPI.exe"
+      VALUE "OriginalFilename", "AutoSyncClean v.78 Clean.exe"
       VALUE "ProductName", "AutoSync Clean"
-      VALUE "ProductVersion", "1.77.0"
+      VALUE "ProductVersion", "1.78.0"
     END
   END
   BLOCK "VarFileInfo"
