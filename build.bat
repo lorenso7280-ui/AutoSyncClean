@@ -9,4 +9,4 @@ if errorlevel 1 exit /b 1
 cmake --build build --config Release
 if errorlevel 1 exit /b 1
 echo.
-echo Da tao: build\Release\AutoSyncClean v.75 IPC DPI.exe
+echo Da tao: build\Release\AutoSyncClean v.76 IPC DPI.exe

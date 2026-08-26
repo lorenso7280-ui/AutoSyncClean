@@ -22,7 +22,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.75 IPC DPI - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.76 IPC DPI - Đồng Bộ Thao Tác Phím & Chuột";
 
 constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
 constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
@@ -364,12 +364,27 @@ void SyncChecksFromList() {
 
 HWND InputTarget(HWND topLevel);
 
-bool PointInSource(POINT screen, POINT& client, RECT& rc) {
+bool IsMouseButtonMessage(UINT message) {
+    return message == WM_LBUTTONDOWN || message == WM_LBUTTONUP ||
+           message == WM_RBUTTONDOWN || message == WM_RBUTTONUP ||
+           message == WM_MBUTTONDOWN || message == WM_MBUTTONUP;
+}
+
+bool PointInSource(POINT screen, UINT message, POINT& client, RECT& rc) {
     HWND source = g_source ? g_source : GetForegroundWindow();
     if (!source || source == g_main) return false;
     source = GetAncestor(source, GA_ROOT);
     HWND foreground = GetForegroundWindow();
-    if (g_source && GetAncestor(foreground, GA_ROOT) != source) return false;
+    if (g_source && GetAncestor(foreground, GA_ROOT) != source) {
+        // The first physical mouse-down that activates the selected game is
+        // observed by WH_MOUSE_LL before Windows changes the foreground HWND.
+        // During recording, accept that button event only when the visible
+        // window under the hook point really belongs to the chosen source.
+        // This avoids dropping DOWN while also rejecting clicks on the editor.
+        HWND hit = WindowFromPoint(screen);
+        if (!g_recording || !IsMouseButtonMessage(message) ||
+            !hit || GetAncestor(hit, GA_ROOT) != source) return false;
+    }
     // Store every recording in one canonical coordinate space: the top-level
     // client area of the source window. The old code measured against whichever
     // child happened to own focus, then replayed against a possibly different
@@ -532,7 +547,7 @@ void AddMacro(MacroEvent e) {
 
 void SendMouse(UINT msg, const MSLLHOOKSTRUCT* m) {
     POINT p{}; RECT src{};
-    if (!PointInSource(m->pt, p, src) || src.right <= 0 || src.bottom <= 0) return;
+    if (!PointInSource(m->pt, msg, p, src) || src.right <= 0 || src.bottom <= 0) return;
     const int sourceWidth = static_cast<int>(src.right - src.left);
     const int sourceHeight = static_cast<int>(src.bottom - src.top);
     double nx = std::clamp(static_cast<double>(p.x) / sourceWidth, 0.0, 1.0);

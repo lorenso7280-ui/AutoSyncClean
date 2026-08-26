@@ -1,6 +1,16 @@
-# AutoSync Clean v.75 IPC DPI
+# AutoSync Clean v.76 IPC DPI
 
-## Sửa tọa độ vùng client và DPI trong v75
+## Sửa thiếu Mouse Down trong v76
+
+- Khi người dùng bắt đầu ghi từ cửa sổ biên tập rồi click lần đầu vào game,
+  Windows phát hook `LEFT MOUSE DOWN` trước khi chuyển foreground sang game.
+  V75 đã loại nhầm sự kiện này và đôi khi chỉ lưu `LEFT MOUSE UP`.
+- V76 nhận sự kiện kích hoạt đầu tiên nếu điểm click thực sự nằm trên cửa sổ
+  nguồn đã chọn; click vào cửa sổ biên tập hoặc ứng dụng khác vẫn bị loại.
+- Một click hợp lệ phải xuất hiện thành đủ hai dòng `LEFT MOUSE DOWN` và
+  `LEFT MOUSE UP` trước khi lưu hoặc phát lại.
+
+## Sửa tọa độ vùng client và DPI từ v75
 
 - Tiến trình được khai báo **Per-Monitor DPI Aware V2**, nên tọa độ vật lý từ
   hook chuột và các phép `ScreenToClient`/`ClientToScreen` dùng cùng một hệ đo
@@ -204,7 +214,7 @@ với ứng dụng đã triển khai giao thức `VirtualInputLab.Target.V3`.
 ## Cách thử với VirtualInputLab V3
 
 1. Mở 6 lần `VirtualInputTarget.exe` của VirtualInputLab V3.
-2. Mở `AutoSyncClean v.75 IPC DPI.exe`, bấm nút **IPC** trên thanh công cụ.
+2. Mở `AutoSyncClean v.76 IPC DPI.exe`, bấm nút **IPC** trên thanh công cụ.
 3. Tích **Bật mô-đun IPC (Target tương thích)** và bấm **Làm mới Target**.
 4. Đặt chuột lần lượt lên bốn nút mẫu, nhấn `F1`, `F2`, `F3`, `F4`.
 5. Chọn số vòng, thời gian giữ và giãn cách rồi bấm **Bắt đầu 1–2–3–4**.
