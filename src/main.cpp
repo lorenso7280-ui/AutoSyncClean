@@ -22,7 +22,7 @@
 
 namespace {
 constexpr wchar_t kClassName[] = L"AutoSyncClean.Main";
-constexpr wchar_t kTitle[] = L"AutoSync Clean v.76 IPC DPI - Đồng Bộ Thao Tác Phím & Chuột";
+constexpr wchar_t kTitle[] = L"AutoSync Clean v.77 IPC DPI - Đồng Bộ Thao Tác Phím & Chuột";
 
 constexpr COLORREF kDarkCanvas = RGB(7, 16, 31);
 constexpr COLORREF kDarkPanel = RGB(10, 23, 41);
@@ -977,13 +977,15 @@ DWORD WINAPI PlayThread(void* parameter) {
                     case MacroType::KeyDown: PostMessageW(target, WM_KEYDOWN, e.data, 1); break;
                     case MacroType::KeyUp: PostMessageW(target, WM_KEYUP, e.data, (1LL << 30) | (1LL << 31)); break;
                     case MacroType::MouseMove:
-                        UnitySend(target, WM_MOUSEMOVE, 0,
-                                  MappedPoint(destination.topLevel, target, e.nx, e.ny));
+                        PostMessageW(target, WM_MOUSEMOVE, 0,
+                                     MappedPoint(destination.topLevel, target, e.nx, e.ny));
                         break;
                     case MacroType::MouseDown: {
                         const LPARAM point = MappedPoint(destination.topLevel, target, e.nx, e.ny);
-                        PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
-                        UnitySend(target, static_cast<UINT>(e.data),
+                        // Replay through the same queued Win32 path used by
+                        // live synchronization, which Doomsday already accepts.
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
+                        PostMessageW(target, static_cast<UINT>(e.data),
                             e.data == WM_LBUTTONDOWN ? MK_LBUTTON :
                             e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON,
                             point);
@@ -991,8 +993,8 @@ DWORD WINAPI PlayThread(void* parameter) {
                     }
                     case MacroType::MouseUp: {
                         const LPARAM point = MappedPoint(destination.topLevel, target, e.nx, e.ny);
-                        PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
-                        UnitySend(target, static_cast<UINT>(e.data), 0, point);
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
+                        PostMessageW(target, static_cast<UINT>(e.data), 0, point);
                         break;
                     }
                     case MacroType::MouseClick: {
@@ -1001,16 +1003,16 @@ DWORD WINAPI PlayThread(void* parameter) {
                         const WPARAM button = e.data == WM_LBUTTONDOWN ? MK_LBUTTON
                                              : e.data == WM_RBUTTONDOWN ? MK_RBUTTON : MK_MBUTTON;
                         const LPARAM point = MappedPoint(destination.topLevel, target, e.nx, e.ny);
-                        PrimeUnityBackgroundTarget(target, point, static_cast<UINT>(e.data));
-                        UnitySend(target, static_cast<UINT>(e.data), button, point);
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
+                        PostMessageW(target, static_cast<UINT>(e.data), button, point);
                         Sleep(40);
-                        UnitySend(target, WM_MOUSEMOVE, 0, point);
-                        UnitySend(target, upMessage, 0, point);
+                        PostMessageW(target, WM_MOUSEMOVE, 0, point);
+                        PostMessageW(target, upMessage, 0, point);
                         break;
                     }
                     case MacroType::Wheel:
-                        UnitySend(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel),
-                                  MappedPoint(destination.topLevel, target, e.nx, e.ny));
+                        PostMessageW(target, WM_MOUSEWHEEL, MAKEWPARAM(0, e.wheel),
+                                     MappedPoint(destination.topLevel, target, e.nx, e.ny));
                         break;
                 }
             }

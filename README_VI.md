@@ -1,4 +1,13 @@
-# AutoSync Clean v.76 IPC DPI
+# AutoSync Clean v.77 IPC DPI
+
+## Phát bản ghi theo đường đồng bộ trực tiếp trong v77
+
+- V76 đã ghi đủ `LEFT MOUSE DOWN` và `LEFT MOUSE UP`, nhưng phát nền dùng
+  `SendMessageTimeout` kèm chuỗi kích hoạt riêng nên Doomsday không phản hồi.
+- V77 phát `WM_MOUSEMOVE`, `WM_LBUTTONDOWN` và `WM_LBUTTONUP` bằng cùng hàng
+  đợi `PostMessage` đã hoạt động ổn định trong chế độ đồng bộ trực tiếp.
+- Tọa độ vẫn được dựng từ vùng client/DPI của từng cửa sổ, và phát lại không
+  di chuyển con trỏ thật hoặc đưa game lên foreground.
 
 ## Sửa thiếu Mouse Down trong v76
 
@@ -214,7 +223,7 @@ với ứng dụng đã triển khai giao thức `VirtualInputLab.Target.V3`.
 ## Cách thử với VirtualInputLab V3
 
 1. Mở 6 lần `VirtualInputTarget.exe` của VirtualInputLab V3.
-2. Mở `AutoSyncClean v.76 IPC DPI.exe`, bấm nút **IPC** trên thanh công cụ.
+2. Mở `AutoSyncClean v.77 IPC DPI.exe`, bấm nút **IPC** trên thanh công cụ.
 3. Tích **Bật mô-đun IPC (Target tương thích)** và bấm **Làm mới Target**.
 4. Đặt chuột lần lượt lên bốn nút mẫu, nhấn `F1`, `F2`, `F3`, `F4`.
 5. Chọn số vòng, thời gian giữ và giãn cách rồi bấm **Bắt đầu 1–2–3–4**.
