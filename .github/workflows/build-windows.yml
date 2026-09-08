@@ -31,14 +31,15 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package | Out-Null
-          Copy-Item "build/Release/AutoSyncClean v.78 Clean.exe" package/
+          Copy-Item "build/Release/AutoSyncClean v.79 Clean.exe" package/
           Copy-Item README_VI.md package/
-          Compress-Archive -Path package/* -DestinationPath AutoSyncClean_Windows_x64.zip
+          if (Test-Path CHANGELOG_v79.md) { Copy-Item CHANGELOG_v79.md package/ }
+          Compress-Archive -Path package/* -DestinationPath AutoSyncClean_v79_Windows_x64.zip
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: AutoSyncClean-Windows-x64
-          path: AutoSyncClean_Windows_x64.zip
+          name: AutoSyncClean-v79-Windows-x64
+          path: AutoSyncClean_v79_Windows_x64.zip
           if-no-files-found: error
           retention-days: 30
