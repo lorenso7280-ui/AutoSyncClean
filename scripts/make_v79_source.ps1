@@ -21,10 +21,7 @@ function Replace-Required {
     $script:text = $script:text.Replace($oldNormalized, $newNormalized)
 }
 
-Replace-Required \
-    'constexpr wchar_t kTitle[] = L"AutoSync Clean v.78 Clean - Đồng Bộ Thao Tác Phím & Chuột";' \
-    'constexpr wchar_t kTitle[] = L"AutoSync Clean v.79 Clean - Đồng Bộ Thao Tác Phím & Chuột";' \
-    'version title'
+Replace-Required 'v.78 Clean' 'v.79 Clean' 'version title'
 
 Replace-Required @'
 bool g_thumbnailDragMoved{};
@@ -62,10 +59,8 @@ Replace-Required @'
         if (hadTopRect) {
             RECT restoredRect{};
             if (ListView_GetItemRect(g_list, restoreRow, &restoredRect, LVIR_BOUNDS)) {
-                // EnsureVisible only guarantees that the old row is visible; it can place
-                // that row near the bottom and make a long list appear to jump upward.
-                // Scroll by the remaining pixel delta so the same row stays at the same
-                // visual Y position after a status refresh/rebuild.
+                // EnsureVisible can place the old top row near the bottom.
+                // Apply the remaining pixel delta so the user's viewport stays put.
                 ListView_Scroll(g_list, 0, restoredRect.top - savedTopPixel);
             }
         }
@@ -95,11 +90,6 @@ Replace-Required @'
     ListView_SetItemState(g_list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
 '@ 'remember right-clicked row'
 
-Replace-Required \
-    '    AppendMenuW(menu, MF_STRING, IDM_REMOVE_ONE, L"Xóa khỏi danh sách");' \
-    '    AppendMenuW(menu, MF_STRING, IDM_REMOVE_ONE, L"Xóa cửa sổ này khỏi danh sách");' \
-    'clarify single-row delete menu'
-
 Replace-Required @'
     TrackPopupMenu(menu, TPM_RIGHTBUTTON, p.x, p.y, 0, g_main, nullptr);
     DestroyMenu(menu);
@@ -115,30 +105,12 @@ Replace-Required @'
         case IDM_REMOVE_ONE: {
             SyncChecksFromList();
             std::unordered_set<HWND> targets;
-            for (const auto& window : g_windows)
-                if (window.selected) targets.insert(window.hwnd);
-            if (targets.empty() && selected) targets.insert(selected);
-            if (targets.contains(g_source)) {
-                if (g_sync) SetSync(false);
-                g_source = nullptr;
-            }
-            for (HWND target : targets) if (target) g_ignored.insert(target);
-            std::erase_if(g_windows, [&](const WindowItem& window) {
-                return targets.contains(window.hwnd);
-            });
-            RebuildList();
-            RefreshThumbnailViewer(true);
-            SetStatus(L"Đã xóa " + std::to_wstring(targets.size()) +
-                      L" cửa sổ được đánh dấu khỏi danh sách; game vẫn đang chạy.");
-            break;
-        }
 '@ @'
         case IDM_REMOVE_ONE: {
             SyncChecksFromList();
 
-            // A row invoked directly by right-click is a single-row action.
-            // Do not require (or consume) synchronization checkboxes. This is
-            // especially important for OFFLINE rows because their HWND is null.
+            // A right-click menu action always applies to the row that was clicked.
+            // This also works for OFFLINE rows whose HWND has already become null.
             if (g_contextMenuRow >= 0 && g_contextMenuRow < static_cast<int>(g_windows.size())) {
                 const size_t index = static_cast<size_t>(g_contextMenuRow);
                 const HWND target = g_windows[index].hwnd;
@@ -147,34 +119,14 @@ Replace-Required @'
                     g_source = nullptr;
                 }
                 if (target) g_ignored.insert(target);
-                g_windows.erase(g_windows.begin() + static_cast<std::ptrdiff_t>(index));
+                g_windows.erase(g_windows.begin() + index);
                 RebuildList();
                 RefreshThumbnailViewer(true);
-                SetStatus(L"Đã xóa cửa sổ khỏi danh sách; game vẫn đang chạy.");
                 break;
             }
 
-            // Preserve the v78 bulk-checkbox behavior for any non-context-menu
-            // invocation so existing workflows are not changed unexpectedly.
             std::unordered_set<HWND> targets;
-            for (const auto& window : g_windows)
-                if (window.selected) targets.insert(window.hwnd);
-            if (targets.empty() && selected) targets.insert(selected);
-            if (targets.contains(g_source)) {
-                if (g_sync) SetSync(false);
-                g_source = nullptr;
-            }
-            for (HWND target : targets) if (target) g_ignored.insert(target);
-            std::erase_if(g_windows, [&](const WindowItem& window) {
-                return targets.contains(window.hwnd);
-            });
-            RebuildList();
-            RefreshThumbnailViewer(true);
-            SetStatus(L"Đã xóa " + std::to_wstring(targets.size()) +
-                      L" cửa sổ được đánh dấu khỏi danh sách; game vẫn đang chạy.");
-            break;
-        }
-'@ 'delete right-clicked offline row without checkbox'
+'@ 'delete right-clicked row without checkbox'
 
 $directory = Split-Path -Parent $OutputPath
 if ($directory) {
