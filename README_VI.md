@@ -1,4 +1,4 @@
-# AutoSync Clean v.78 Clean
+# AutoSync Clean v80
 
 Đây là bản giao diện gọn, chỉ giữ các chức năng đã sử dụng được:
 
@@ -7,6 +7,8 @@
 - Đồng bộ trực tiếp bàn phím và chuột từ cửa sổ chính.
 - Mở nhiều cửa sổ, sắp xếp/đổi kích thước cửa sổ.
 - Xem cửa sổ thu nhỏ, Proxy và Thiết lập.
+- Giữ nguyên vị trí cuộn của danh sách khi phần mềm tự cập nhật trạng thái.
+- Có thể chuột phải vào đúng một dòng Offline để xóa khỏi danh sách mà không cần đánh dấu checkbox.
 
 Đã loại bỏ khỏi giao diện:
 
@@ -24,14 +26,13 @@
 
 ## Build trên GitHub Actions
 
-Upload toàn bộ nội dung dự án lên nhánh `build/windows-release`. Workflow
-`.github/workflows/build-windows.yml` sẽ tạo artifact
-`AutoSyncClean-Windows-x64`, bên trong có:
+Workflow `.github/workflows/build-windows.yml` sẽ tạo artifact
+`AutoSync-Clean-v80-Windows-x64`, bên trong có:
 
-`AutoSyncClean v.78 Clean.exe`
+`AutoSync Clean v80.exe`
 
 ## Giới hạn
 
 Ứng dụng đồng bộ bằng hook bàn phím/chuột Windows và thông điệp Win32. Một số
-game có thể không nhận thao tác nền. Bản v78 Clean không chứa DLL injection,
+game có thể không nhận thao tác nền. Bản v80 không chứa DLL injection,
 hook nội bộ trò chơi hoặc cơ chế vượt bảo vệ tiến trình.
