@@ -16,12 +16,12 @@ function Replace-Required {
     $oldNormalized = $Old -replace "`r`n", "`n"
     $newNormalized = $New -replace "`r`n", "`n"
     if (-not $script:text.Contains($oldNormalized)) {
-        throw "v79 patch failed: expected source block not found: $Name"
+        throw "v80 patch failed: expected source block not found: $Name"
     }
     $script:text = $script:text.Replace($oldNormalized, $newNormalized)
 }
 
-Replace-Required 'v.78 Clean' 'v.79 Clean' 'version title'
+Replace-Required 'v.78 Clean' 'v80' 'version title'
 
 Replace-Required @'
 bool g_thumbnailDragMoved{};
@@ -134,4 +134,4 @@ if ($directory) {
 }
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($OutputPath, $text, $utf8NoBom)
-Write-Host "Generated v79 source: $OutputPath"
+Write-Host "Generated v80 source: $OutputPath"
