@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(V81_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 set(V81_GENERATED_MAIN "${V81_GENERATED_DIR}/main_v81.cpp")
+set(V82_GENERATED_MAIN "${V81_GENERATED_DIR}/main_v82.cpp")
 file(MAKE_DIRECTORY "${V81_GENERATED_DIR}")
 
 execute_process(
@@ -22,13 +23,27 @@ if(NOT V81_PATCH_RESULT EQUAL 0)
 endif()
 message(STATUS "${V81_PATCH_STDOUT}")
 
+execute_process(
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_SOURCE_DIR}/scripts/make_v82_delta.ps1"
+            -InputPath "${V81_GENERATED_MAIN}"
+            -OutputPath "${V82_GENERATED_MAIN}"
+    RESULT_VARIABLE V82_PATCH_RESULT
+    OUTPUT_VARIABLE V82_PATCH_STDOUT
+    ERROR_VARIABLE V82_PATCH_STDERR
+)
+if(NOT V82_PATCH_RESULT EQUAL 0)
+    message(FATAL_ERROR "Unable to generate v82 source.\n${V82_PATCH_STDOUT}\n${V82_PATCH_STDERR}")
+endif()
+message(STATUS "${V82_PATCH_STDOUT}")
+
 add_executable(AutoSyncClean WIN32
-    "${V81_GENERATED_MAIN}"
+    "${V82_GENERATED_MAIN}"
     src/app.rc
     src/app.manifest
 )
 
-set_target_properties(AutoSyncClean PROPERTIES OUTPUT_NAME "AutoSync Clean v81")
+set_target_properties(AutoSyncClean PROPERTIES OUTPUT_NAME "AutoSync Clean v82")
 
 target_include_directories(AutoSyncClean PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_definitions(AutoSyncClean PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
