@@ -1,4 +1,4 @@
-# AutoSync Clean v80
+# AutoSync Clean v81
 
 Đây là bản giao diện gọn, chỉ giữ các chức năng đã sử dụng được:
 
@@ -8,6 +8,7 @@
 - Mở nhiều cửa sổ, sắp xếp/đổi kích thước cửa sổ.
 - Xem cửa sổ thu nhỏ, Proxy và Thiết lập.
 - Giữ nguyên vị trí cuộn của danh sách khi phần mềm tự cập nhật trạng thái.
+- Khi tích/bỏ tích checkbox ở bất kỳ hàng nào, danh sách không còn tự cuộn lên trên.
 - Có thể chuột phải vào đúng một dòng Offline để xóa khỏi danh sách mà không cần đánh dấu checkbox.
 
 Đã loại bỏ khỏi giao diện:
@@ -27,12 +28,12 @@
 ## Build trên GitHub Actions
 
 Workflow `.github/workflows/build-windows.yml` sẽ tạo artifact
-`AutoSync-Clean-v80-Windows-x64`, bên trong có:
+`AutoSync-Clean-v81-Windows-x64`, bên trong có:
 
-`AutoSync Clean v80.exe`
+`AutoSync Clean v81.exe`
 
 ## Giới hạn
 
 Ứng dụng đồng bộ bằng hook bàn phím/chuột Windows và thông điệp Win32. Một số
-game có thể không nhận thao tác nền. Bản v80 không chứa DLL injection,
+game có thể không nhận thao tác nền. Bản v81 không chứa DLL injection,
 hook nội bộ trò chơi hoặc cơ chế vượt bảo vệ tiến trình.
