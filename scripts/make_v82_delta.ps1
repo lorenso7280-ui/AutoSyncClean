@@ -43,17 +43,13 @@ Replace-Required @'
                 if (!g_bulkChecking && checkStateChanged && checkboxChanged->iItem >= 0 &&
 '@ 'ignore rebuild-generated checkbox notifications'
 
-Replace-Required @'
-            HWND proxy = button(IDC_PROXY, L"◉");
-'@ '' 'remove Proxy toolbar button'
-
-Replace-Required @'
-            AddToolbarTooltip(proxy, L"Proxy");
-'@ '' 'remove Proxy tooltip'
-
-Replace-Required @'
-    MoveWindow(GetDlgItem(hwnd, IDC_PROXY), right - 28, top, 28, buttonH, TRUE); right -= 32;
-'@ '' 'remove Proxy toolbar slot'
+$proxyButtonPattern = '(?m)^\s*HWND proxy = button\(IDC_PROXY,[^\n]*\n'
+$proxyTipPattern = '(?m)^\s*AddToolbarTooltip\(proxy,[^\n]*\n'
+$proxyLayoutPattern = '(?m)^\s*MoveWindow\(GetDlgItem\(hwnd, IDC_PROXY\),[^\n]*\n'
+foreach ($pattern in @($proxyButtonPattern, $proxyTipPattern, $proxyLayoutPattern)) {
+    if (-not [regex]::IsMatch($text, $pattern)) { throw "v82 patch failed: Proxy toolbar pattern not found" }
+    $text = [regex]::Replace($text, $pattern, '', 1)
+}
 
 $directory = Split-Path -Parent $OutputPath
 if ($directory) { New-Item -ItemType Directory -Force -Path $directory | Out-Null }
