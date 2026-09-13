@@ -16,7 +16,7 @@ function Replace-Required {
     $script:text = $script:text.Replace($oldNormalized, $newNormalized)
 }
 
-Replace-Required 'AutoSync Clean v81 - Đồng Bộ Thao Tác Phím & Chuột' 'AutoSync Clean v82 - Đồng Bộ Thao Tác Phím & Chuột' 'version title'
+$text = $text.Replace('v81', 'v82')
 
 Replace-Required @'
 void RebuildList() {
