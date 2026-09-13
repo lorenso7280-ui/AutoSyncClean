@@ -16,12 +16,12 @@ function Replace-Required {
     $oldNormalized = $Old -replace "`r`n", "`n"
     $newNormalized = $New -replace "`r`n", "`n"
     if (-not $script:text.Contains($oldNormalized)) {
-        throw "v80 patch failed: expected source block not found: $Name"
+        throw "v81 patch failed: expected source block not found: $Name"
     }
     $script:text = $script:text.Replace($oldNormalized, $newNormalized)
 }
 
-Replace-Required 'v.78 Clean' 'v80' 'version title'
+Replace-Required 'v.78 Clean' 'v81' 'version title'
 
 Replace-Required @'
 bool g_thumbnailDragMoved{};
@@ -33,6 +33,11 @@ bool g_bulkChecking{};
 int g_contextMenuRow{-1};
 int g_arrangeSizeIndex{2};
 '@ 'context-menu row state'
+
+Replace-Required @'
+        signature += window.selected ? L"1:" : L"0:";
+'@ @'
+'@ 'do not rebuild list for checkbox-only changes'
 
 Replace-Required @'
     const int selectedRow = ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
@@ -59,8 +64,6 @@ Replace-Required @'
         if (hadTopRect) {
             RECT restoredRect{};
             if (ListView_GetItemRect(g_list, restoreRow, &restoredRect, LVIR_BOUNDS)) {
-                // EnsureVisible can place the old top row near the bottom.
-                // Apply the remaining pixel delta so the user's viewport stays put.
                 ListView_Scroll(g_list, 0, restoredRect.top - savedTopPixel);
             }
         }
@@ -126,7 +129,66 @@ Replace-Required @'
             }
 
             std::unordered_set<HWND> targets;
-'@ 'delete right-clicked row without checkbox'
+'@ 'delete right-clicked offline row without checkbox'
+
+Replace-Required @'
+            if (n->idFrom == IDC_LIST && n->code == LVN_ITEMCHANGED &&
+                !g_bulkChecking && (GetKeyState(VK_SHIFT) & 0x8000)) {
+                const auto* changed = reinterpret_cast<NMLISTVIEW*>(lp);
+                const bool becameSelected =
+                    (changed->uChanged & LVIF_STATE) &&
+                    !(changed->uOldState & LVIS_SELECTED) &&
+                    (changed->uNewState & LVIS_SELECTED);
+                if (becameSelected) {
+                    g_bulkChecking = true;
+                    int row = -1;
+                    while ((row = ListView_GetNextItem(g_list, row, LVNI_SELECTED)) != -1)
+                        ListView_SetCheckState(g_list, row, TRUE);
+                    g_bulkChecking = false;
+                    SyncChecksFromList();
+                    SetStatus(L"Đã tích các cửa sổ trong dải đang chọn.");
+                }
+            }
+'@ @'
+            if (n->idFrom == IDC_LIST && n->code == LVN_ITEMCHANGED) {
+                const auto* changed = reinterpret_cast<NMLISTVIEW*>(lp);
+
+                // A checkbox change must never rebuild the whole ListView. The v80
+                // timer included WindowItem::selected in the list signature, so the
+                // next 3-second refresh deleted/reinserted every row and the native
+                // ListView moved the viewport back toward the top. Update only the
+                // model and repaint the affected status cell instead.
+                const bool checkStateChanged =
+                    (changed->uChanged & LVIF_STATE) &&
+                    ((changed->uOldState & LVIS_STATEIMAGEMASK) !=
+                     (changed->uNewState & LVIS_STATEIMAGEMASK));
+                if (checkStateChanged && changed->iItem >= 0 &&
+                    changed->iItem < static_cast<int>(g_windows.size())) {
+                    const int row = changed->iItem;
+                    g_windows[static_cast<size_t>(row)].selected =
+                        ListView_GetCheckState(g_list, row) != FALSE;
+                    RECT statusCell{};
+                    if (ListView_GetSubItemRect(g_list, row, 3, LVIR_BOUNDS, &statusCell))
+                        InvalidateRect(g_list, &statusCell, FALSE);
+                }
+
+                if (!g_bulkChecking && (GetKeyState(VK_SHIFT) & 0x8000)) {
+                    const bool becameSelected =
+                        (changed->uChanged & LVIF_STATE) &&
+                        !(changed->uOldState & LVIS_SELECTED) &&
+                        (changed->uNewState & LVIS_SELECTED);
+                    if (becameSelected) {
+                        g_bulkChecking = true;
+                        int row = -1;
+                        while ((row = ListView_GetNextItem(g_list, row, LVNI_SELECTED)) != -1)
+                            ListView_SetCheckState(g_list, row, TRUE);
+                        g_bulkChecking = false;
+                        SyncChecksFromList();
+                        SetStatus(L"Đã tích các cửa sổ trong dải đang chọn.");
+                    }
+                }
+            }
+'@ 'keep checkbox changes in place without scrolling'
 
 $directory = Split-Path -Parent $OutputPath
 if ($directory) {
@@ -134,4 +196,4 @@ if ($directory) {
 }
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($OutputPath, $text, $utf8NoBom)
-Write-Host "Generated v80 source: $OutputPath"
+Write-Host "Generated v81 source: $OutputPath"
