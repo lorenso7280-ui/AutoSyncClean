@@ -37,6 +37,7 @@ int g_arrangeSizeIndex{2};
 Replace-Required @'
         signature += window.selected ? L"1:" : L"0:";
 '@ @'
+        // v81: checkbox selection is intentionally excluded from the list rebuild signature.
 '@ 'do not rebuild list for checkbox-only changes'
 
 Replace-Required @'
