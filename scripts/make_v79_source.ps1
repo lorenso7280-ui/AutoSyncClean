@@ -135,61 +135,26 @@ Replace-Required @'
 Replace-Required @'
             if (n->idFrom == IDC_LIST && n->code == LVN_ITEMCHANGED &&
                 !g_bulkChecking && (GetKeyState(VK_SHIFT) & 0x8000)) {
-                const auto* changed = reinterpret_cast<NMLISTVIEW*>(lp);
-                const bool becameSelected =
-                    (changed->uChanged & LVIF_STATE) &&
-                    !(changed->uOldState & LVIS_SELECTED) &&
-                    (changed->uNewState & LVIS_SELECTED);
-                if (becameSelected) {
-                    g_bulkChecking = true;
-                    int row = -1;
-                    while ((row = ListView_GetNextItem(g_list, row, LVNI_SELECTED)) != -1)
-                        ListView_SetCheckState(g_list, row, TRUE);
-                    g_bulkChecking = false;
-                    SyncChecksFromList();
-                    SetStatus(L"Đã tích các cửa sổ trong dải đang chọn.");
-                }
-            }
 '@ @'
             if (n->idFrom == IDC_LIST && n->code == LVN_ITEMCHANGED) {
-                const auto* changed = reinterpret_cast<NMLISTVIEW*>(lp);
-
-                // A checkbox change must never rebuild the whole ListView. The v80
-                // timer included WindowItem::selected in the list signature, so the
-                // next 3-second refresh deleted/reinserted every row and the native
-                // ListView moved the viewport back toward the top. Update only the
-                // model and repaint the affected status cell instead.
+                const auto* checkboxChanged = reinterpret_cast<NMLISTVIEW*>(lp);
                 const bool checkStateChanged =
-                    (changed->uChanged & LVIF_STATE) &&
-                    ((changed->uOldState & LVIS_STATEIMAGEMASK) !=
-                     (changed->uNewState & LVIS_STATEIMAGEMASK));
-                if (checkStateChanged && changed->iItem >= 0 &&
-                    changed->iItem < static_cast<int>(g_windows.size())) {
-                    const int row = changed->iItem;
+                    (checkboxChanged->uChanged & LVIF_STATE) &&
+                    ((checkboxChanged->uOldState & LVIS_STATEIMAGEMASK) !=
+                     (checkboxChanged->uNewState & LVIS_STATEIMAGEMASK));
+                if (checkStateChanged && checkboxChanged->iItem >= 0 &&
+                    checkboxChanged->iItem < static_cast<int>(g_windows.size())) {
+                    const int row = checkboxChanged->iItem;
                     g_windows[static_cast<size_t>(row)].selected =
                         ListView_GetCheckState(g_list, row) != FALSE;
                     RECT statusCell{};
                     if (ListView_GetSubItemRect(g_list, row, 3, LVIR_BOUNDS, &statusCell))
                         InvalidateRect(g_list, &statusCell, FALSE);
                 }
-
-                if (!g_bulkChecking && (GetKeyState(VK_SHIFT) & 0x8000)) {
-                    const bool becameSelected =
-                        (changed->uChanged & LVIF_STATE) &&
-                        !(changed->uOldState & LVIS_SELECTED) &&
-                        (changed->uNewState & LVIS_SELECTED);
-                    if (becameSelected) {
-                        g_bulkChecking = true;
-                        int row = -1;
-                        while ((row = ListView_GetNextItem(g_list, row, LVNI_SELECTED)) != -1)
-                            ListView_SetCheckState(g_list, row, TRUE);
-                        g_bulkChecking = false;
-                        SyncChecksFromList();
-                        SetStatus(L"Đã tích các cửa sổ trong dải đang chọn.");
-                    }
-                }
             }
-'@ 'keep checkbox changes in place without scrolling'
+            if (n->idFrom == IDC_LIST && n->code == LVN_ITEMCHANGED &&
+                !g_bulkChecking && (GetKeyState(VK_SHIFT) & 0x8000)) {
+'@ 'insert checkbox handler without rebuilding list'
 
 $directory = Split-Path -Parent $OutputPath
 if ($directory) {
